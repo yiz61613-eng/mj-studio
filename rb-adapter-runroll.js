@@ -135,6 +135,7 @@
         ei += edges.length;
         await sleep(200);
       }
+      await sleep(2500);   // 等服务端写入追平再读终态，防 collab 滞后快照少报
       const fin = await this.state();
       const vids = fin.nodes.filter(n => n.node_kind === 'video');
       return { videos: vids.length, assets: fin.nodes.length - vids.length, edges: fin.edges.length };

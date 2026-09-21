@@ -202,7 +202,15 @@
     const epsKey = JSON.stringify(cfg.episodes);
     if (!S.segs.length || S.parsedEps !== epsKey) { await parse(); S.parsedEps = epsKey; }
     const a = await ensureAdapter();
-    const st = await a.state();
+    // 画布实况检测：连读两次，节点/连线数一致才采信（collab 端点偶发返回滞后快照，读旧数据会把缺素材误报成 0）
+    let st = await a.state(), stable = true;
+    for (let i = 0; i < 3; i++) {
+      await sleep(1500);
+      const st2 = await a.state();
+      if (st2.nodes.length === st.nodes.length && st2.edges.length === st.edges.length) { st = st2; break; }
+      st = st2;
+      if (i === 2) stable = false;
+    }
     const idx = a.uidIndex(st.nodes);            // base -> uid
     const uidOf = f => idx[norm(f)] || null;
     const missing = [];
@@ -257,11 +265,13 @@
       colCursor += Math.ceil(list.length / cfg.perColumn) + cfg.epGapCols - 1;
     }
     S.plan = { charPlaced, grid, segPlans, missing, capabilities: a.capabilities };
+    const vids = st.nodes.filter(n => n.node_kind === 'video');
     return {
       platform: a.name, assetsOnCanvas: st.nodes.length,
+      canvas: { nodes: st.nodes.length, videos: vids.length, assets: st.nodes.length - vids.length, edges: st.edges.length, stable },
       videoNodes: segPlans.length, edges: segPlans.reduce((n, p) => n + p.refs.length, 0),
       charAssets: charPlaced.length, gridAssets: grid.length,
-      missingUids: missing.length, missing: missing.slice(0, 8),
+      missingUids: missing.length, missing: missing.slice(0, 8), missingAll: [...new Set(missing)],
       canCreateNodes: a.capabilities.createNodes, note: a.capabilities.note || '',
     };
   }
@@ -319,7 +329,9 @@
     const files = [];
     for (const u of need) {
       const url = cfg.assetRoot + '/' + u.dir.split('-')[0] + '-' + enc(u.dir.split('-').slice(1).join('-')) + '/' + enc(u.f);
-      const blob = await (await fetch(url)).blob();
+      const rr = await fetch(url);
+      if (!rr.ok) throw new Error('素材文件读取失败 ' + rr.status + '：' + u.f + '（服务虚拟仓与磁盘都没有）');
+      const blob = await rr.blob();
       files.push({ name: u.f, blob });
     }
     const res = await a.upload(files);

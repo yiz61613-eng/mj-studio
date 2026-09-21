@@ -410,7 +410,11 @@ async function pollJob(){
     const j=await (await fetch(SRV+'/__jobs/'+bridgeJobId)).json();
     (j.events||[]).forEach((e,i)=>{ if(i>=pollJob._n||0){ blog('· '+e.msg); pollJob._n=i+1; } });
     if(j.status==='done'){ blog('✅ 完成');
-      if(j.result&&j.result.videoNodes!=null) blog('规划：'+j.result.videoNodes+' 个视频节点 / '+j.result.edges+' 条参考 / 缺素材 '+j.result.missingUids);
+      if(j.result&&j.result.videoNodes!=null){
+  blog('规划：'+j.result.videoNodes+' 个视频节点 / '+j.result.edges+' 条参考 / 缺素材 '+j.result.missingUids);
+  if(j.result.canvas&&!j.result.canvas.stable) blog('⚠ 画布读取不稳定（服务端同步滞后），本次统计可能不准，建议稍后重新核对');
+  if(j.result.missingUids>0&&j.result.missingAll&&j.result.missingAll.length) blog('缺的素材：'+j.result.missingAll.join('、'));
+}
       if(j.result&&j.result.built) blog('落盘：'+j.result.built.videos+' 视频节点 / '+j.result.built.edges+' 连线');
       bridgeJobId=null; pollJob._n=0;
     }else if(j.status==='failed'){ blog('❌ 失败：'+(j.result||'未知错误')); bridgeJobId=null; pollJob._n=0; }

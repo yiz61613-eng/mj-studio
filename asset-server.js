@@ -114,6 +114,7 @@ http.createServer(async (req,res)=>{
   res.setHeader('Access-Control-Allow-Origin','*');
   res.setHeader('Access-Control-Allow-Methods','GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers','*');
+  res.setHeader('Cache-Control','no-store');   // 虚拟仓内容随时变，禁掉浏览器缓存防旧分镜/素材
   if(req.method==='OPTIONS'){ res.end(); return; }
   const p = decodeURIComponent(req.url.split('?')[0]);
   const qs = new URLSearchParams(req.url.split('?')[1] || '');

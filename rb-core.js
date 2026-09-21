@@ -73,15 +73,20 @@
   }
 
   /* ---------- 1. 解析（平台无关，全部只读） ---------- */
+  async function fetchText(url) {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('素材服务返回 ' + r.status + '：' + decodeURIComponent(url.replace(cfg.assetRoot, '')) + '（文件不存在或服务未同步）');
+    return r.text();
+  }
   async function parse() {
     if (!(await health())) throw new Error('素材服务未启动：双击 start.bat（端口 8899）');
     const T = cfg.assetRoot + '/' + enc(cfg.textDir) + '/';
-    const mt = await (await fetch(T + enc(cfg.mappingFile))).text();
+    const mt = await fetchText(T + enc(cfg.mappingFile));
     // 映射表为纯 JSON，直接解析（兼容 CSP 严格的扩展环境）
     const mj = mt.match(/=\s*(\{[\s\S]*\})\s*;?\s*/) || mt.match(/(\{[\s\S]*\})/);
     const M = mj ? JSON.parse(mj[1]) : {};
     try { window.MJ_MAPPING = M; } catch (e) {}
-    const md = (await (await fetch(T + enc(cfg.mdFile))).text()).replace(/\r/g, '');
+    const md = (await fetchText(T + enc(cfg.mdFile))).replace(/\r/g, '');
     const segs = []; let cur = null;
     for (const ln of md.split('\n')) {
       const h = ln.match(/【本段时长：(\d+)秒】【(\d+(?:-\d+)+)】/);
@@ -96,7 +101,9 @@
 
     const dirs = {};
     for (const d of ['0-角色和声音', '1-场景', '2-道具']) {
-      dirs[d] = (await (await fetch(cfg.assetRoot + '/__list/' + enc(d))).json()).files;
+      const lr = await fetch(cfg.assetRoot + '/__list/' + enc(d));
+      if (!lr.ok) throw new Error('素材目录读取失败 ' + lr.status + '：' + d);
+      dirs[d] = (await lr.json()).files;
     }
     const roleAll = dirs['0-角色和声音'].map(f => ({ f: f.name, base: norm(f.name), isAudio: f.isAudio }));
     const sceneFiles = dirs['1-场景'].map(f => ({ f: f.name, base: norm(f.name) }));

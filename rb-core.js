@@ -108,7 +108,22 @@
     const roleAll = dirs['0-角色和声音'].map(f => ({ f: f.name, base: norm(f.name), isAudio: f.isAudio }));
     const sceneFiles = dirs['1-场景'].map(f => ({ f: f.name, base: norm(f.name) }));
     const propFiles = dirs['2-道具'].map(f => ({ f: f.name, base: norm(f.name) }));
-    const fScene = t => sceneFiles.find(n => n.base === t || n.base.startsWith(t));
+    const sceneCore = b => { const m = b.match(/^\d+(?:-\d+)*-(.+?)(?:-[^-]+)?$/); return m ? m[1] : b; };
+    // 场景匹配打分：精确 100 > 文件名含关键词 90+ > 关键词含全名 80+ > 关键词含主名 60+（对齐工作台的双向包含逻辑）
+    const sceneScore = (n, key) => {
+      if (!key) return 0;
+      if (n.base === key) return 100;
+      if (n.base.includes(key)) return 90 + Math.min(key.length, 20) / 10;
+      if (key.includes(n.base)) return 80 + Math.min(n.base.length, 20) / 10;
+      const core = sceneCore(n.base);
+      if (core.length >= 2 && key.includes(core)) return 60 + Math.min(core.length, 20) / 10;
+      return 0;
+    };
+    const fScene = t => {
+      let best = null, bs = 0;
+      for (const n of sceneFiles) { const s = sceneScore(n, t); if (s > bs) { bs = s; best = n; } }
+      return bs >= 60 ? best : null;   // 模糊也够不上就不挂，宁缺毋错
+    };
     const fRole = t => roleAll.find(n => !n.isAudio && (n.base === t || n.base.startsWith(t)));
     const fAud = ch => roleAll.find(n => n.isAudio && n.base.includes(ch) && n.base.includes('音轨'));
     const sceneTxts = new Set(), outfitTxts = new Set();
@@ -134,7 +149,15 @@
         if (scLine) {
           const nm = scLine.replace(/^\d+(?:-\d+)*\s+[^\s]+\s*\/\s*[^\s]+\s+/, '').trim();
           p.scenePhrase = nm;
-          if (!p.scene) p.scene = sceneFiles.find(n => !sceneTxts.has(n.base) && n.base.includes(nm)) || null;
+        if (!p.scene) {
+          let best = null, bs = 0;
+          for (const n of sceneFiles) {
+            if (sceneTxts.has(n.base)) continue;   // 已被映射表占用的不抢
+            const s = sceneScore(n, nm);
+            if (s > bs) { bs = s; best = n; }
+          }
+          p.scene = bs >= 60 ? best : null;
+        }
         }
       }
       const propLine = p.lines.find(l => l.startsWith('道具：'));

@@ -453,7 +453,7 @@ document.getElementById('bBtnGo').onclick=()=>postJob(collectCfg('import'));
 'use strict';
 /* ================= 状态与持久化 ================= */
 const LS_KEY = 'mj_studio_state_v1';
-let state = { name:'', segments:[], status:{}, promptEdits:{}, refCounts:{}, videoNames:{}, order:[], assets:[], mounts:{}, sceneMap:{}, outfitMap:{}, mapSceneKeys:[], mapOutfitKeys:[], pos:{} };
+let state = { name:'', segments:[], status:{}, promptEdits:{}, refCounts:{}, videoNames:{}, order:[], assets:[], mounts:{}, sceneMap:{}, outfitMap:{}, mapSceneKeys:[], mapOutfitKeys:[], mapVersion:0, pos:{} };
 let urlCache = {};   // assetKey -> objectURL
 let selId = null;
 let view = { x:60, y:60, s:1 };
@@ -1581,11 +1581,14 @@ async function initInner(){
   await openDB();
   const has = loadState();
   if(window.MJ_MAPPING){
+    const mv = MJ_MAPPING._v || 1;
+    const stale = state.mapVersion !== mv;   // 映射表文件更新后自动重新套用
     const needScene = !state.sceneMap || !Object.keys(state.sceneMap).length;
     const needOutfit = !state.outfitMap || !Object.keys(state.outfitMap).length;
-    if(needScene || needOutfit){
-      if(needScene) state.sceneMap = MJ_MAPPING.sceneMap;
-      if(needOutfit) state.outfitMap = MJ_MAPPING.outfitMap;
+    if(stale || needScene || needOutfit){
+      if(stale || needScene) state.sceneMap = MJ_MAPPING.sceneMap;
+      if(stale || needOutfit) state.outfitMap = MJ_MAPPING.outfitMap;
+      state.mapVersion = mv;
       rebuildMapKeys(); saveState();
     }
   }
@@ -1734,7 +1737,7 @@ initInner();
     m.classList.remove('show');
     try{ await dbClearAll(); }catch(e){ console.warn('db clear', e); }
     Object.keys(urlCache).forEach(k=>{ try{ URL.revokeObjectURL(urlCache[k]); }catch(e){} delete urlCache[k]; });
-    state = { name:'', segments:[], status:{}, promptEdits:{}, refCounts:{}, videoNames:{}, order:[], assets:[], mounts:{}, sceneMap:{}, outfitMap:{}, mapSceneKeys:[], mapOutfitKeys:[], pos:{} };
+    state = { name:'', segments:[], status:{}, promptEdits:{}, refCounts:{}, videoNames:{}, order:[], assets:[], mounts:{}, sceneMap:{}, outfitMap:{}, mapSceneKeys:[], mapOutfitKeys:[], mapVersion:0, pos:{} };
     saveState();
     window.MJ_MAPPING = {};   // 本次会话内不再套用旧映射（刷新后磁盘映射表会重新加载）
     selId = null; bridgeJobId = null; pollJob._n = 0;

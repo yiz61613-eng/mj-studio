@@ -122,6 +122,13 @@ body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif; backgroun
 #licModal .box{background:var(--bg2); border:1px solid var(--acc2); border-radius:14px; width:440px; max-width:92vw; padding:24px 26px;}
 #licModal h2{font-size:16px; margin:0 0 4px; color:var(--acc2);}
 #licModal p{font-size:12.5px; color:var(--tx2); margin:4px 0 12px; line-height:1.6;}
+#wipeModal{position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:75; display:none; align-items:center; justify-content:center;}
+#wipeModal.show{display:flex;}
+#wipeModal .box{background:var(--bg2); border:1px solid #c0392b; border-radius:14px; width:440px; max-width:92vw; padding:24px 26px;}
+#wipeModal h2{font-size:16px; margin:0 0 8px; color:#e67e22;}
+#wipeModal p{font-size:12.5px; color:var(--tx2); margin:4px 0 10px; line-height:1.7;}
+.btn.danger{background:#c0392b; border-color:#c0392b; color:#fff;}
+.btn.danger:hover{background:#e74c3c;}
 #licMc{background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:12px; font-size:24px; letter-spacing:3px; text-align:center; margin-bottom:14px; cursor:pointer;}
 #licMc:hover{border-color:var(--acc2);}
 #licCode{width:100%; box-sizing:border-box; padding:9px; background:var(--bg); border:1px solid var(--line); border-radius:8px; color:var(--tx); font-size:13px;}
@@ -194,6 +201,7 @@ body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif; backgroun
   <button class="btn primary" id="btnBridge">🌉 画布直通</button>
   <a class="btn" href="https://www.runroll.cn/my-canvas" target="_blank">打开 Runroll 画布 ↗</a>
   <button class="btn" id="btnReport">导出进度报告</button>
+  <button class="btn" id="btnWipe" title="清空工作台：移除全部分镜、资产与参考，恢复初始状态">🧹 清空</button>
   <button class="btn" id="btnHelp" title="使用说明">❓</button>
 </div>
 
@@ -434,6 +442,34 @@ document.getElementById('bModel').onchange=e=>{ document.getElementById('bModelC
 document.getElementById('bCanvas').onchange=onCanvasChange;
 document.getElementById('bBtnPlan').onclick=()=>postJob(collectCfg('plan'));
 document.getElementById('bBtnGo').onclick=()=>postJob(collectCfg('import'));
+
+/* ---------- 清空工作台：分镜/节点/资产/挂载/位置全部重置 ---------- */
+document.getElementById('btnWipe').onclick = ()=>{
+  if(!state.segments.length && !state.assets.length && !Object.keys(state.videoNames||{}).length){ toast('工作台已经是空的'); return; }
+  document.getElementById('wipeAlsoStore').checked = true;
+  document.getElementById('wipeModal').classList.add('show');
+};
+document.getElementById('wipeCancel').onclick = ()=> document.getElementById('wipeModal').classList.remove('show');
+document.getElementById('wipeGo').onclick = async ()=>{
+  const alsoStore = document.getElementById('wipeAlsoStore').checked;
+  document.getElementById('wipeModal').classList.remove('show');
+  try{ await dbClearAll(); }catch(e){ console.warn('db clear', e); }
+  Object.keys(urlCache).forEach(k=>{ try{ URL.revokeObjectURL(urlCache[k]); }catch(e){} delete urlCache[k]; });
+  state = { name:'', segments:[], status:{}, promptEdits:{}, refCounts:{}, videoNames:{}, order:[], assets:[], mounts:{}, sceneMap:{}, outfitMap:{}, mapSceneKeys:[], mapOutfitKeys:[], pos:{} };
+  saveState();
+  window.MJ_MAPPING = {};   // 本次会话内不再套用旧映射（刷新后磁盘映射表会重新加载）
+  selId = null; bridgeJobId = null; pollJob._n = 0;
+  view = { x:60, y:60, s:1 }; applyView();
+  document.getElementById('detail').classList.remove('open');
+  document.getElementById('lib').classList.remove('open');
+  document.getElementById('projName').textContent = '';
+  document.getElementById('bLog').textContent = '';
+  layoutAndRender();
+  if(alsoStore){
+    try{ await fetch(SRV+'/__store/clear',{method:'POST'}); toast('已全部清空（含直通服务缓存），可重新导入分镜与素材'); }
+    catch(e){ toast('已清空工作台（本机服务未连接，直通缓存未清）'); }
+  } else toast('工作台已清空，可重新导入分镜与素材');
+};
 </script>
 
 <div id="toast"></div>
@@ -1605,6 +1641,19 @@ async function initInner(){
 }
 initInner();
 </script>
+<div id="wipeModal">
+  <div class="box">
+    <h2>🧹 清空工作台</h2>
+    <p>将移除<b>全部分镜文本、视频节点、资产库（参考图/视频/音频）、自动挂载与节点摆放</b>。此操作不可恢复，之后需要重新上传。</p>
+    <p style="margin-top:0">注：磁盘上的 <span class="k">mapping-data.js</span> 映射表文件与本机授权不受影响（重新打开页面后映射表会自动重新套用）。</p>
+    <label style="display:flex; gap:6px; align-items:center; font-size:12.5px; color:var(--tx2)"><input type="checkbox" id="wipeAlsoStore" checked> 同时清空本机直通服务里的分镜/素材缓存（推荐，下次直通会自动重新同步）</label>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px">
+      <button class="btn" id="wipeCancel">取消</button>
+      <button class="btn danger" id="wipeGo">确认清空</button>
+    </div>
+  </div>
+</div>
+
 <div id="helpModal">
   <div class="box">
     <h2>🎬 漫剧直出工作台 · 使用说明</h2>

@@ -245,6 +245,11 @@ http.createServer(async (req,res)=>{
     const items={}; for(const k of store.keys()) items[k]=store.get(k).length;
     send(res,200,{count:store.size, items}); return;
   }
+  if(p === '/__store/clear' && req.method==='POST'){
+    if(gate(res)) return;
+    const n = store.size; store.clear();
+    send(res,200,{ok:true, cleared:n}); return;
+  }
 
   /* ---------- 工具脚本分发 ---------- */
   if(p.startsWith('/__tool/')){

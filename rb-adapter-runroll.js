@@ -101,6 +101,21 @@
       if (window.RBCore.cfg.clearFirst) await this.clear();
       const st = await this.state();
       const meta = Object.fromEntries(st.nodes.map(n => [n.node_uid, { kind: n.node_kind, label: n.label }]));
+      // 重建前先删掉本次要建的这些段的旧视频节点/旧连线——否则同 uid 的 create 被服务端忽略，旧参考永远留在画布上
+      const myUids = new Set(P.segPlans.map(sp => 'video-' + ids().canvasId + '-rb-' + sp.seg.id));
+      const oldNodes = st.nodes.filter(n => myUids.has(n.node_uid));
+      if (oldNodes.length) {
+        const touch = e => myUids.has(e.target_node_uid || e.to_node_uid) || myUids.has(e.source_node_uid || e.from_node_uid);
+        const oldEdges = st.edges.filter(touch);
+        for (let i = 0; i < oldEdges.length; i += this.limits.edgeCreate) {
+          await this.batch({ nodes: { create: [], update: [], delete: [] }, edges: { create: [], delete: oldEdges.slice(i, i + this.limits.edgeCreate).map(e => ({ edge_uid: e.edge_uid })) } }).catch(() => {});
+          await sleep(120);
+        }
+        for (let i = 0; i < oldNodes.length; i += this.limits.nodeDelete) {
+          await this.batch({ nodes: { create: [], update: [], delete: oldNodes.slice(i, i + this.limits.nodeDelete).map(n => ({ node_uid: n.node_uid, node_kind: n.node_kind, label: n.label || '' })) }, edges: { create: [], delete: [] } }).catch(() => {});
+          await sleep(150);
+        }
+      }
       // 资产排位
       const layout = [...P.charPlaced, ...P.grid].filter(a2 => meta[a2.uid]);
       for (let i = 0; i < layout.length; i += this.limits.nodeCreate) {

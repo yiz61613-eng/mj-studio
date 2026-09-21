@@ -1,0 +1,23 @@
+# ===== 授权与私密（绝不入库）=====
+license.json
+lic-secret.key
+*.exe
+*.crx
+*.pem
+
+# ===== 业务数据（各自维护，不入库）=====
+mapping-data.js
+4-文本/
+
+# ===== 开发/构建产物 =====
+_wav_b64.txt
+_patch-store.js
+extension-id.txt
+installer/payload/
+node/
+*.zip
+*.log
+handoff-2026-09-18-1315/
+start-local.bat
+RB-MULTIPLATFORM-README.md
+RUNROLL-IMPORTER-README.md

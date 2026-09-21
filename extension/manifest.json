@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "RB 画布批量导入器（漫剧直出工作台）",
+  "version": "1.0.0",
+  "description": "漫剧直出工作台的画布桥：在 Runroll / UpDream 画布页自动就绪，接收工作台「画布直通」任务，批量导入分镜节点并自动挂参考。永不触碰生成按钮。",
+  "permissions": ["tabs"],
+  "host_permissions": ["http://localhost:8899/*", "http://127.0.0.1:8899/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.runroll.cn/*",
+        "*://runroll.cn/*",
+        "*://*.updream.cn/*",
+        "*://updream.cn/*"
+      ],
+      "js": ["rb-core.js", "rb-adapter-runroll.js", "rb-adapter-updream.js", "rb-content-bridge.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

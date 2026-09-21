@@ -1,0 +1,42 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>授权码签发工具 · 仅管理员</title>
+<body style="font-family:system-ui;background:#14181d;color:#e8eaed;display:flex;min-height:100vh;align-items:center;justify-content:center">
+<div style="background:#1e242c;border:1px solid #e8a13c;border-radius:14px;padding:28px 32px;width:520px;max-width:94vw">
+<h2 style="margin:0 0 4px;color:#e8a13c">🔑 授权码签发工具（仅管理员，勿外传）</h2>
+<p style="font-size:12.5px;color:#9aa0a6;margin:4px 0 16px">同事把屏幕上的<b>机器码</b>报给你 → 填下面 → 生成授权码发给他。断网也能用（本页纯本地计算）。</p>
+<label style="font-size:12px">密钥（同事机器上服务目录里 lic-secret.key 的内容）</label>
+<input id="sec" placeholder="48 位十六进制" style="width:100%;box-sizing:border-box;margin:6px 0 12px;padding:9px;background:#14181d;border:1px solid #444;border-radius:8px;color:#e8eaed;font-size:13px">
+<label style="font-size:12px">机器码（同事屏幕上的 XXXX-XXXX-XXXX，横杠可带可不带）</label>
+<input id="mc" placeholder="例如 A1B2-C3D4-E5F6" style="width:100%;box-sizing:border-box;margin:6px 0 12px;padding:9px;background:#14181d;border:1px solid #444;border-radius:8px;color:#e8eaed;font-size:15px;letter-spacing:1px">
+<label style="font-size:12px">授权给谁（备注名）</label>
+<input id="nm" placeholder="例如 小张" style="width:100%;box-sizing:border-box;margin:6px 0 12px;padding:9px;background:#14181d;border:1px solid #444;border-radius:8px;color:#e8eaed;font-size:14px">
+<label style="font-size:12px">有效期至（留空 = 永久）</label>
+<input id="ex" type="date" style="width:100%;box-sizing:border-box;margin:6px 0 16px;padding:9px;background:#14181d;border:1px solid #444;border-radius:8px;color:#e8eaed;font-size:14px">
+<button onclick="gen()" style="width:100%;padding:11px;background:#e8a13c;border:0;border-radius:8px;color:#14181d;font-weight:700;font-size:14px;cursor:pointer">生成授权码</button>
+<div id="out" style="display:none;margin-top:16px">
+  <div style="font-size:12px;color:#9aa0a6;margin-bottom:6px">授权码（复制整行发给同事）：</div>
+  <textarea id="code" readonly style="width:100%;box-sizing:border-box;height:84px;background:#14181d;border:1px solid #3a8ee6;border-radius:8px;color:#8ab4f8;font-size:12px;padding:8px"></textarea>
+  <button onclick="document.getElementById('code').select();document.execCommand('copy')" style="margin-top:8px;padding:8px 18px;background:#3a8ee6;border:0;border-radius:8px;color:#fff;font-size:13px;cursor:pointer">复制</button>
+</div>
+<div id="msg" style="color:#f28b82;font-size:12px;margin-top:10px;min-height:16px"></div>
+</div>
+<script>
+const b64u = buf => { let s=''; const u=new Uint8Array(buf); for(const b of u) s+=String.fromCharCode(b); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); };
+async function gen(){
+  const mc = document.getElementById('mc').value.trim().toUpperCase().replace(/-/g,'');
+  if(!/^[0-9A-F]{12}$/.test(mc)){ document.getElementById('msg').textContent='机器码格式不对：应为 12 位（XXXX-XXXX-XXXX）'; return; }
+  const secret = (document.getElementById('sec').value||'').trim();
+  if(!/^[0-9a-fA-F]{48}$/.test(secret)){ document.getElementById('msg').textContent='密钥不对：应为同事机器上 %LOCALAPPDATA%\\MjStudio\\server\\lic-secret.key 里的 48 位内容'; return; }
+  document.getElementById('msg').textContent='';
+  const n = document.getElementById('nm').value.trim();
+  const e = document.getElementById('ex').value.trim();
+  const payload = b64u(new TextEncoder().encode(JSON.stringify({m:mc, n:n, e:e||undefined})));
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), {name:'HMAC', hash:'SHA-256'}, false, ['sign']);
+  const sig = b64u(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload)));
+  document.getElementById('out').style.display='block';
+  document.getElementById('code').value = payload + '.' + sig;
+}
+function hexToBytes(h){ const a=new Uint8Array(h.length/2); for(let i=0;i<a.length;i++) a[i]=parseInt(h.substr(i*2,2),16); return a; }
+</script>
+</body>

@@ -442,34 +442,7 @@ document.getElementById('bModel').onchange=e=>{ document.getElementById('bModelC
 document.getElementById('bCanvas').onchange=onCanvasChange;
 document.getElementById('bBtnPlan').onclick=()=>postJob(collectCfg('plan'));
 document.getElementById('bBtnGo').onclick=()=>postJob(collectCfg('import'));
-
-/* ---------- 清空工作台：分镜/节点/资产/挂载/位置全部重置 ---------- */
-document.getElementById('btnWipe').onclick = ()=>{
-  if(!state.segments.length && !state.assets.length && !Object.keys(state.videoNames||{}).length){ toast('工作台已经是空的'); return; }
-  document.getElementById('wipeAlsoStore').checked = true;
-  document.getElementById('wipeModal').classList.add('show');
-};
-document.getElementById('wipeCancel').onclick = ()=> document.getElementById('wipeModal').classList.remove('show');
-document.getElementById('wipeGo').onclick = async ()=>{
-  const alsoStore = document.getElementById('wipeAlsoStore').checked;
-  document.getElementById('wipeModal').classList.remove('show');
-  try{ await dbClearAll(); }catch(e){ console.warn('db clear', e); }
-  Object.keys(urlCache).forEach(k=>{ try{ URL.revokeObjectURL(urlCache[k]); }catch(e){} delete urlCache[k]; });
-  state = { name:'', segments:[], status:{}, promptEdits:{}, refCounts:{}, videoNames:{}, order:[], assets:[], mounts:{}, sceneMap:{}, outfitMap:{}, mapSceneKeys:[], mapOutfitKeys:[], pos:{} };
-  saveState();
-  window.MJ_MAPPING = {};   // 本次会话内不再套用旧映射（刷新后磁盘映射表会重新加载）
-  selId = null; bridgeJobId = null; pollJob._n = 0;
-  view = { x:60, y:60, s:1 }; applyView();
-  document.getElementById('detail').classList.remove('open');
-  document.getElementById('lib').classList.remove('open');
-  document.getElementById('projName').textContent = '';
-  document.getElementById('bLog').textContent = '';
-  layoutAndRender();
-  if(alsoStore){
-    try{ await fetch(SRV+'/__store/clear',{method:'POST'}); toast('已全部清空（含直通服务缓存），可重新导入分镜与素材'); }
-    catch(e){ toast('已清空工作台（本机服务未连接，直通缓存未清）'); }
-  } else toast('工作台已清空，可重新导入分镜与素材');
-};
+/* 清空工作台的按钮绑定在文件末尾（弹窗 HTML 之后），避免元素未加载 */
 </script>
 
 <div id="toast"></div>
@@ -1742,6 +1715,40 @@ initInner();
   };
   m.addEventListener('click', e=>{ if(e.target===m && !document.getElementById('helpNoMore').checked) m.classList.remove('show'); });
   if(!localStorage.getItem(KEY)) setTimeout(()=> m.classList.add('show'), 400);
+})();
+</script>
+
+<script>
+/* ---------- 清空工作台：分镜/节点/资产/挂载/位置全部重置（放在弹窗 HTML 之后确保元素已加载） ---------- */
+(function(){
+  const m = document.getElementById('wipeModal');
+  document.getElementById('btnWipe').onclick = ()=>{
+    if(!state.segments.length && !state.assets.length && !Object.keys(state.videoNames||{}).length){ toast('工作台已经是空的'); return; }
+    document.getElementById('wipeAlsoStore').checked = true;
+    m.classList.add('show');
+  };
+  document.getElementById('wipeCancel').onclick = ()=> m.classList.remove('show');
+  m.addEventListener('click', e=>{ if(e.target===m) m.classList.remove('show'); });
+  document.getElementById('wipeGo').onclick = async ()=>{
+    const alsoStore = document.getElementById('wipeAlsoStore').checked;
+    m.classList.remove('show');
+    try{ await dbClearAll(); }catch(e){ console.warn('db clear', e); }
+    Object.keys(urlCache).forEach(k=>{ try{ URL.revokeObjectURL(urlCache[k]); }catch(e){} delete urlCache[k]; });
+    state = { name:'', segments:[], status:{}, promptEdits:{}, refCounts:{}, videoNames:{}, order:[], assets:[], mounts:{}, sceneMap:{}, outfitMap:{}, mapSceneKeys:[], mapOutfitKeys:[], pos:{} };
+    saveState();
+    window.MJ_MAPPING = {};   // 本次会话内不再套用旧映射（刷新后磁盘映射表会重新加载）
+    selId = null; bridgeJobId = null; pollJob._n = 0;
+    view = { x:60, y:60, s:1 }; applyView();
+    document.getElementById('detail').classList.remove('open');
+    document.getElementById('lib').classList.remove('open');
+    document.getElementById('projName').textContent = '';
+    document.getElementById('bLog').textContent = '';
+    layoutAndRender();
+    if(alsoStore){
+      try{ await fetch(SRV+'/__store/clear',{method:'POST'}); toast('已全部清空（含直通服务缓存），可重新导入分镜与素材'); }
+      catch(e){ toast('已清空工作台（本机服务未连接，直通缓存未清）'); }
+    } else toast('工作台已清空，可重新导入分镜与素材');
+  };
 })();
 </script>
 </body>

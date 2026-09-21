@@ -129,6 +129,25 @@
     const sceneTxts = new Set(), outfitTxts = new Set();
     Object.values(M.sceneMap || {}).forEach(v => sceneTxts.add(v.txt));
     Object.values(M.outfitMap || {}).forEach(a => a.forEach(o => outfitTxts.add(o.txt)));
+    // 每集×角色的服装分布（供缺口兼底：映射表是 15s 版生成的，30s 合并段会多出角色）
+    const epOutfit = {};
+    Object.entries(M.outfitMap || {}).forEach(([k, arr]) => {
+      const ep = +k.split('-')[0];
+      for (const o of arr) {
+        (epOutfit[ep] = epOutfit[ep] || {}); (epOutfit[ep][o.char] = epOutfit[ep][o.char] || {});
+        epOutfit[ep][o.char][o.txt] = (epOutfit[ep][o.char][o.txt] || 0) + 1;
+      }
+    });
+    const pickOutfit = (ch, ep) => {
+      for (let d = 0; d < 60; d++) {
+        for (const e of d === 0 ? [ep] : [ep - d, ep + d]) {
+          const m = epOutfit[e] && epOutfit[e][ch];
+          if (m) { const t = Object.keys(m).sort((a, b) => m[b] - m[a])[0]; const rf = fRole(t); if (rf) return rf; }
+        }
+        if (ep - d < 1 && ep + d > 60) break;
+      }
+      return null;
+    };
 
     for (const p of S.segs) {
       const sm = (M.sceneMap || {})[p.id], of = (M.outfitMap || {})[p.id] || [];
@@ -138,13 +157,13 @@
         const rf = fRole(o.txt); if (rf) p.chars[o.char] = rf;
         const au = fAud(o.char); if (au) p.audios[o.char] = au;
       }
+      // 角色行里有、映射没覆盖的角色：按就近集数的服装兼底 + 补音轨（30s 合并段常见）
+      const chLine = p.lines.find(l => l.startsWith('角色：'));
+      if (chLine) for (const ch of chLine.replace(/^角色：/, '').split(/[、，,]/).map(t => t.trim().split(/（/)[0]).filter(Boolean)) {
+        if (!p.chars[ch]) { const rf = pickOutfit(ch, p.ep); if (rf) p.chars[ch] = rf; }
+        if (!p.audios[ch]) { const au = fAud(ch); if (au) p.audios[ch] = au; }
+      }
       if (!of.length) {
-        const chLine = p.lines.find(l => l.startsWith('角色：'));
-        if (chLine) for (const ch of chLine.replace(/^角色：/, '').split(/[、，,]/).map(t => t.trim()).filter(Boolean)) {
-          const au = fAud(ch); if (au) p.audios[ch] = au;
-          const rf = roleAll.filter(n => !n.isAudio && outfitTxts.has(n.base) && n.base.includes(ch)).sort((a, b) => a.base < b.base ? -1 : 1)[0];
-          if (rf) p.chars[ch] = rf;
-        }
         const scLine = p.lines.find(l => /^\d+(?:-\d+)*\s+(夜|日|晨|清晨|黄昏|傍晚)\s*\/\s*(内|外)\s+/.test(l));
         if (scLine) {
           const nm = scLine.replace(/^\d+(?:-\d+)*\s+[^\s]+\s*\/\s*[^\s]+\s+/, '').trim();

@@ -1,7 +1,7 @@
 ﻿# 编译自包含安装器（embed 全部文件 → 单个 EXE）
 # 用法：在 installer 目录 powershell -File build-installer.ps1
 $ErrorActionPreference='Stop'
-$root='C:\Users\Administrator\cola\outputs\ai漫剧一键直出工作台'
+$root = $env:MJ_ROOT; if(-not $root){ $root = Split-Path -Parent $PSScriptRoot }   # 仓库根目录，本机绝对路径不入库
 $ins=Join-Path $root 'installer'
 $csc='C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 

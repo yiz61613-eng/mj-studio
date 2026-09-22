@@ -1283,7 +1283,7 @@ function autoMountAll(){
   const mounts = {};
   Object.keys(state.mounts).forEach(nid=>{ mounts[nid] = state.mounts[nid].filter(m=>!m.auto); });
   const audios = lib.filter(a=>a.cat==='audio');
-  // 音频：一个角色一条音轨（如 001-陆沉_音轨.wav），节点里每个出场角色挂自己的音轨
+  // 音频：一个角色一条音轨（如 001-角色甲_音轨.wav），节点里每个出场角色挂自己的音轨
   const audioByChar = {};
   audios.forEach(a=>{
     const ch = audioCharOf(a);

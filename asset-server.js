@@ -89,8 +89,9 @@ const jobs = []; let jobSeq = 1;
 const bridges = {}; // worker -> {worker, platform, pageUrl, models, ts}
 const JOB = {
   new(cfg, label) {
-    const j = { id: jobSeq++, type: cfg && cfg.type === 'plan' ? 'plan' : 'import',
-      cfg: cfg || {}, label: label || (cfg && cfg.type === 'plan' ? '核对规划' : '一键直通'),
+    const t = cfg && cfg.type;
+    const j = { id: jobSeq++, type: t || 'import',
+      cfg: cfg || {}, label: label || (t === 'plan' ? '核对规划' : t === 'probe' ? '节点探针' : '一键直通'),
       target: (cfg && cfg.target) || null,
       status: 'queued', pct: 0, msg: '排队中', events: [], result: null,
       createdAt: Date.now(), startedAt: null, finishedAt: null, worker: null };

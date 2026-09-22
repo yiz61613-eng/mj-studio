@@ -168,6 +168,33 @@
       return { videos: vids.length, assets: fin.nodes.length - vids.length, edges: fin.edges.length,
         edgesExpected: allEdges.length, verify: { missedNodes, missedEdges } };
     },
+    // 探针：把指定段位节点完整数据抛出来，同时全画布扫描视频节点里的 URL 字段，摸清生成结果存在哪
+    probe: async function (segId) {
+      let st = await this.state();
+      for (let i = 0; i < 3; i++) {
+        await sleep(1500);
+        const s2 = await this.state();
+        if (s2.nodes.length === st.nodes.length && s2.edges.length === st.edges.length) { st = s2; break; }
+        st = s2;
+      }
+      const uid = 'video-' + ids().canvasId + '-rb-' + segId;
+      const target = st.nodes.find(n => n.node_uid === uid) || null;
+      const urls = [];
+      const walk = (v, path2, depth) => {
+        if (v == null || depth > 6) return;
+        if (typeof v === 'string') { if (/^https?:\/\//i.test(v)) urls.push({ path: path2, val: v.slice(0, 300) }); return; }
+        if (typeof v !== 'object') return;
+        for (const k of Object.keys(v)) walk(v[k], path2 + '.' + k, depth + 1);
+      };
+      const vids = st.nodes.filter(n => n.node_kind === 'video');
+      const videos = vids.map(n => {
+        urls.length = 0; walk(n.data, 'data', 0);
+        return { uid: n.node_uid, label: n.label, status: (n.data && n.data.generation_status) || null, urls: urls.slice() };
+      });
+      return { canvasId: ids().canvasId, target,
+        videosWithUrls: videos.filter(v => v.urls.length),
+        videoCount: vids.length, totalNodes: st.nodes.length, totalEdges: st.edges.length };
+    },
     clear: async function () {
       const st = await this.state();
       let fails = 0;

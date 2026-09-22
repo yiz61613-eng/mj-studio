@@ -20,11 +20,24 @@
   }
 
   async function execJob(job) {
-    const { type, cfg } = job;
+    const { cfg } = job;
+    const type = (cfg && cfg.type) || job.type;   // 服务端旧版会把 probe 归成 import，以 cfg.type 为准
     const C = window.RBCore.cfg;
     ['episodes', 'model', 'aspect', 'duration', 'resolution', 'perColumn', 'tags', 'clearFirst', 'minDuration'].forEach(k => {
       if (cfg && cfg[k] !== undefined) C[k] = cfg[k];
     });
+    if (type === 'probe') {
+      const a = window.RBCore.pickAdapter();
+      if (!a || !a.probe) throw new Error('当前平台适配器不支持探针');
+      await report(job.id, '探针读取画布节点 ' + (cfg.segId || '') + '…', 30);
+      const r = await a.probe(cfg.segId || '');
+      try { chrome.runtime.sendMessage({ type: 'RB_JOB_DONE', id: job.id, ok: true, result: r }).catch(() => {}); } catch (e) {}
+      return;
+    }
+    if (type !== 'plan' && (!cfg || cfg.confirm !== 'build')) {
+      // 2026-09-22 保险丝：不带确认标记的任务一律拒绝导入，防止误触顶掉画布上已有节点（含已生成的视频）
+      throw new Error('任务缺确认标记（confirm=build），已拒绝执行导入——只有工作台「一键直通」按钮能触发建删');
+    }
     await report(job.id, '解析分镜…', 5);
     const parsed = await window.RBCore.parse();
     await report(job.id, '解析完成：' + parsed.segments + ' 段 / ' + parsed.files + ' 个素材', 15);

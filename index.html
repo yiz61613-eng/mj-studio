@@ -445,7 +445,7 @@ document.getElementById('bridgeClose').onclick=()=>bridgeEl.classList.remove('op
 document.getElementById('bModel').onchange=e=>{ document.getElementById('bModelCustom').style.display=e.target.value==='__custom'?'':'none'; };
 document.getElementById('bCanvas').onchange=onCanvasChange;
 document.getElementById('bBtnPlan').onclick=()=>postJob(collectCfg('plan'));
-document.getElementById('bBtnGo').onclick=()=>postJob(collectCfg('import'));
+document.getElementById('bBtnGo').onclick=()=>postJob(Object.assign(collectCfg('import'),{confirm:'build'}));
 /* 清空工作台的按钮绑定在文件末尾（弹窗 HTML 之后），避免元素未加载 */
 </script>
 

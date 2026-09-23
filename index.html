@@ -457,7 +457,7 @@ document.getElementById('bBtnGo').onclick=()=>postJob(Object.assign(collectCfg('
 'use strict';
 /* ================= 状态与持久化 ================= */
 const LS_KEY = 'mj_studio_state_v1';
-let state = { name:'', segments:[], status:{}, promptEdits:{}, refCounts:{}, videoNames:{}, order:[], assets:[], mounts:{}, sceneMap:{}, outfitMap:{}, mapSceneKeys:[], mapOutfitKeys:[], mapVersion:0, pos:{} };
+let state = { name:'', segments:[], status:{}, promptEdits:{}, refCounts:{}, videoNames:{}, order:[], assets:[], mounts:{}, sceneMap:{}, outfitMap:{}, mapSceneKeys:[], mapOutfitKeys:[], mapVersion:0, mapSource:'', pos:{} };
 let urlCache = {};   // assetKey -> objectURL
 let selId = null;
 let view = { x:60, y:60, s:1 };
@@ -1000,6 +1000,7 @@ function doImport(text, name){
   name = name||'';
   if(/场景映射/.test(name)){
     state.sceneMap = parseSceneMap(text);
+    state.mapSource = 'user';   // 用户自导映射：启动时不再被打包内置映射表覆盖
     rebuildMapKeys(); saveState();
     if(state.segments.length) autoMountAll();
     toast('场景映射表已导入：覆盖 '+Object.keys(state.sceneMap).length+' 个分镜段');
@@ -1007,6 +1008,7 @@ function doImport(text, name){
   }
   if(/角色服装映射|角色映射/.test(name)){
     state.outfitMap = parseOutfitMap(text);
+    state.mapSource = 'user';
     rebuildMapKeys(); saveState();
     if(state.segments.length) autoMountAll();
     toast('角色服装映射表已导入：覆盖 '+Object.keys(state.outfitMap).length+' 个分镜段');
@@ -1584,7 +1586,7 @@ async function exportGenPack(id){
 async function initInner(){
   await openDB();
   const has = loadState();
-  if(window.MJ_MAPPING){
+  if(window.MJ_MAPPING && state.mapSource !== 'user'){
     const mv = MJ_MAPPING._v || 1;
     const stale = state.mapVersion !== mv;   // 映射表文件更新后自动重新套用
     const needScene = !state.sceneMap || !Object.keys(state.sceneMap).length;
@@ -1741,7 +1743,7 @@ initInner();
     m.classList.remove('show');
     try{ await dbClearAll(); }catch(e){ console.warn('db clear', e); }
     Object.keys(urlCache).forEach(k=>{ try{ URL.revokeObjectURL(urlCache[k]); }catch(e){} delete urlCache[k]; });
-    state = { name:'', segments:[], status:{}, promptEdits:{}, refCounts:{}, videoNames:{}, order:[], assets:[], mounts:{}, sceneMap:{}, outfitMap:{}, mapSceneKeys:[], mapOutfitKeys:[], mapVersion:0, pos:{} };
+    state = { name:'', segments:[], status:{}, promptEdits:{}, refCounts:{}, videoNames:{}, order:[], assets:[], mounts:{}, sceneMap:{}, outfitMap:{}, mapSceneKeys:[], mapOutfitKeys:[], mapVersion:0, mapSource:'', pos:{} };
     saveState();
     window.MJ_MAPPING = {};   // 本次会话内不再套用旧映射（刷新后磁盘映射表会重新加载）
     selId = null; bridgeJobId = null; pollJob._n = 0;

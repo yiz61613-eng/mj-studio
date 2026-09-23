@@ -1217,7 +1217,10 @@ function classifyAsset(filename, dir){
   if(ok2) mapCat='role'; else if(sk) mapCat='scene';
   if(!cat){
     // 目录信号优先：已从目录判定 cat 的不再被名字猜测覆盖（如「陆沉办公室」是场景，不因含角色名变人物）
-    if(hitChar) cat='role';
+    // 无目录信号时：场景名比角色名长得多（如「陆沉家客厅」5字 vs「陆沉」2字）→ 场景优先于角色
+    const sceneBeatsChar = hitScene && hitScene.length >= (hitChar ? hitChar.length + 2 : 2);
+    if(sceneBeatsChar) cat='scene';
+    else if(hitChar) cat='role';
     else if(mapCat) cat=mapCat;
     else if(hitScene||hitCode) cat='scene';
     else if(hitProp) cat='prop';

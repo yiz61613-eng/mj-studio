@@ -16,6 +16,7 @@ class Installer
     const string UpdateUrl = "http://localhost:8899/updates.xml";
 
     static string baseDir;
+    static bool serverOk;
 
     [STAThread]
     static void Main()
@@ -31,7 +32,7 @@ class Installer
             CreateShortcut(log);
             WriteUninstaller(log);
             LaunchWorkbench(log);
-            MessageBox.Show("安装完成！\n\n" + log + "\n\n· 桌面快捷方式「漫剧直出工作台」已创建\n· RB 扩展将在重启 Edge/Chrome 后自动出现\n· 生成按钮永远由你自己点", "漫剧直出工作台", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show((serverOk ? "安装完成！" : "安装基本完成，但本地服务没起来：") + "\n\n" + log + "\n\n· 桌面快捷方式「漫剧直出工作台」已创建\n· RB 扩展将在重启 Edge/Chrome 后自动出现\n· 生成按钮永远由你自己点", "漫剧直出工作台", MessageBoxButtons.OK, serverOk ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         }
         catch (Exception ex)
         {
@@ -76,8 +77,49 @@ class Installer
         var psi = new ProcessStartInfo("wscript.exe", "\"" + Path.Combine(baseDir, "run-server.vbs") + "\"");
         psi.UseShellExecute = true;
         Process.Start(psi);
-        System.Threading.Thread.Sleep(1500);
-        log.AppendLine("✔ 本地直通服务已启动（localhost:8899）");
+        serverOk = HealthCheck(log);
+    }
+
+    // [FIX-20260923] 不再赌 1.5 秒：轮询 /__health 最多 10 秒，失败时给出可读诊断
+    static bool HealthCheck(StringBuilder log)
+    {
+        for (int i = 0; i < 40; i++)
+        {
+            try
+            {
+                var req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create("http://localhost:8899/__health");
+                req.Timeout = 1000; req.Proxy = null;
+                using (var resp = (System.Net.HttpWebResponse)req.GetResponse())
+                {
+                    if ((int)resp.StatusCode == 200)
+                    {
+                        log.AppendLine("✔ 本地直通服务已就绪（localhost:8899，等待 " + ((i + 1) / 4.0).ToString("0.#") + " 秒）");
+                        return true;
+                    }
+                }
+            }
+            catch { }
+            System.Threading.Thread.Sleep(250);
+        }
+        Diagnose(log);
+        return false;
+    }
+
+    static void Diagnose(StringBuilder log)
+    {
+        log.AppendLine("✘ 服务 10 秒内未就绪（localhost:8899 连不上）");
+        bool portTaken = false;
+        try
+        {
+            var l = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 8899);
+            l.Start(); l.Stop();
+        }
+        catch { portTaken = true; }
+        bool nodeRunning = false;
+        try { nodeRunning = Process.GetProcessesByName("node").Length > 0; } catch { }
+        if (portTaken) log.AppendLine("  → 8899 端口已被其他程序占用：关掉占用程序（netstat -ano | findstr 8899 查 PID）后重装");
+        else if (!nodeRunning) log.AppendLine("  → 服务进程 node.exe 没在跑：多半被杀毒软件拦截/隔离，请把 " + baseDir + " 加入白名单后重新运行安装程序");
+        else log.AppendLine("  → 进程在但端口不通：重启电脑再试一次；仍不行请截图本弹窗反馈");
     }
 
     static void RegisterTask(StringBuilder log)
@@ -140,6 +182,7 @@ class Installer
 
     static void LaunchWorkbench(StringBuilder log)
     {
+        if (!serverOk) { log.AppendLine("✘ 跳过打开工作台（服务未就绪，见上方诊断）"); return; }
         try
         {
             var psi = new ProcessStartInfo("http://localhost:8899/");

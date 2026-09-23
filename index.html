@@ -1314,6 +1314,25 @@ function autoMountAll(){
         else if(a.sceneKey && s.scene && s.scene.includes(a.sceneKey)) cands.push({a, sc:50+a.sceneKey.length});
       });
       cands.sort((x,y)=>y.sc-x.sc);
+      // 第三级兕底：双字词元重叠打分（场景名 vs 素材名），处理名字不对齐的场景（如「理疗馆走廊」vs「普通走廊」）
+      if(!cands.length && s.scene){
+        const loc = ((s.scene.match(/(?:内|外)\s*(.+)$/)||[])[1]||'').replace(/[（(].*?[)）]/g,'').trim();
+        if(loc.length>=2){
+          const grams=[]; for(let i=0;i<loc.length-1;i++) grams.push(loc.slice(i,i+2));
+          const hasVip=/VIP/i.test(loc);
+          lib.forEach(a=>{
+            if(a.cat!=='scene') return;
+            const base=(a.name||'').replace(/\.[^.]+$/,'');
+            if(!base) return;
+            let hit=0; grams.forEach(g=>{ if(base.includes(g)) hit++; });
+            let sc=grams.length?hit/grams.length:0;
+            if(!hasVip && /VIP/i.test(base)) sc*=0.8;
+            if(hasVip && !/VIP/i.test(base)) sc*=0.8;
+            if(sc>=0.5) cands.push({a, sc:sc*40});
+          });
+          cands.sort((x,y)=>y.sc-x.sc);
+        }
+      }
       if(cands[0]) arr.push({aid:cands[0].a.id, cat:'scene', auto:true});
     }
     // 人物：服装映射表优先，其次文件名匹配

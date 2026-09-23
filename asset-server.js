@@ -43,6 +43,8 @@ function verifyLicense(code){
   } catch(e) { return {ok:false, err:'授权码无法解析'}; }
 }
 let LIC = (()=>{ try { return verifyLicense(fs.readFileSync(LIC_FILE,'utf8')); } catch(e){ return {ok:false}; } })();
+// 绿色版模式：环境变量 MJ_SKIP_LIC=1 时跳过授权 gate（便携分发用，正式安装版不受影响）
+if (process.env.MJ_SKIP_LIC === '1') LIC = { ok: true, name: '绿色版', expiry: '' };
 function gate(res){ if(!LIC.ok){ send(res,403,{error:'未授权：机器码 '+machineCode+'，请向管理员索取授权码'}); return true; } return false; }
 const ACTIVATE_HTML = `<!doctype html><meta charset=utf-8><title>漫剧工作台 · 激活</title>
 <body style="font-family:system-ui;background:#1b1f24;color:#e8eaed;display:flex;min-height:100vh;align-items:center;justify-content:center">

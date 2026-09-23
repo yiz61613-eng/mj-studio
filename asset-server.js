@@ -71,7 +71,9 @@ function xorBuf(buf){
   return out;
 }
 function serveWorkbench(res, file){
-  const enc = path.join(WB_DIR, file + '.enc');
+  // 打包产物文件名映射：enc.js 产 index.enc/mapping.enc，不与请求路径同名
+  const ENC = { 'index.html': 'index.enc', 'mapping-data.js': 'mapping.enc' };
+  const enc = path.join(WB_DIR, ENC[file] || (file + '.enc'));
   fs.readFile(enc,(e,d)=>{
     if(!e){ res.setHeader('Content-Type', file.endsWith('.js')?'application/javascript; charset=utf-8':'text/html; charset=utf-8'); res.end(xorBuf(d)); return; }
     fs.readFile(path.join(WB_DIR, file),(e2,d2)=>{

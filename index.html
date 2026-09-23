@@ -285,9 +285,10 @@ body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif; backgroun
     <div style="margin-top:10px;">
       <button class="btn" id="bBtnPlan">核对规划</button>
       <button class="btn primary" id="bBtnGo">⚡ 一键直通（上传素材＋建节点＋连参考）</button>
+      <button class="btn" id="bBtnChain">⛓ 链式生成（代点：逐段生成，同场景内截帧传参考）</button>
     </div>
     <pre id="bLog">等待任务…</pre>
-    <div style="color:var(--tx2);margin-top:10px;">安全约定：直通只上传素材、建节点、连参考线，永不触碰任何平台的「生成」按钮——生成与积分消耗由你本人操作。</div>
+    <div style="color:var(--tx2);margin-top:10px;">安全约定：直通只上传素材、建节点、连参考线，永不触碰生成按钮。「⛓ 链式生成」是唯一例外：你点下它即授权本次任务的代点生成——逐段排队、同场景内截帧传参考、场景切换自动断链（剧本为事实来源，链外不挂截帧）。</div>
   </div>
 </div>
 <script>
@@ -445,6 +446,37 @@ document.getElementById('bridgeClose').onclick=()=>bridgeEl.classList.remove('op
 document.getElementById('bModel').onchange=e=>{ document.getElementById('bModelCustom').style.display=e.target.value==='__custom'?'':'none'; };
 document.getElementById('bCanvas').onchange=onCanvasChange;
 document.getElementById('bBtnPlan').onclick=()=>postJob(collectCfg('plan'));
+/* ---------- 链式生成 ---------- */
+function frameTimeOf(seg){
+  // 剧本为事实来源：镜头自带时间轴 [镜头N: a-b]。默认尾帧；收尾是位移（出门/离开等）退到上一稳定镜头结束秒
+  const shots = seg.shots || [];
+  if (!shots.length) return 60000;
+  const last = shots[shots.length - 1];
+  if (last.to == null) return 60000;
+  if (shots.length > 1 && /出门|离开|走入|走进|走向|转身走|追出|跑去|赶往|冲出|离场/.test(last.text || '')) {
+    const prev = shots[shots.length - 2];
+    return (prev.to != null ? prev.to : last.from || 0) * 1000;
+  }
+  return last.to * 1000;
+}
+document.getElementById('bBtnChain').onclick = async () => {
+  if (!state.segments.length) { toast('先导入分镜'); return; }
+  const eps = parseEps(document.getElementById('bEps').value);
+  const segs = state.segments.filter(s => !eps || (+s.id.split('-')[0] >= eps[0] && +s.id.split('-')[0] <= eps[1]));
+  if (!segs.length) { toast('集数范围内没有分镜段'); return; }
+  const base = collectCfg('chain');
+  const cfg = { type: 'chain', confirm: 'build', defaultModel: (typeof base.model === 'number' ? base.model : 63),
+    pollMax: 90, target: base.target, segs: segs.map((s, i) => {
+      const next = segs[i + 1];
+      const sc = s.id.replace(/-[0-9]+$/, ''), scN = next ? next.id.replace(/-[0-9]+$/, '') : null;
+      return { label: s.id, t: frameTimeOf(s), refTo: (next && sc === scN) ? next.id : null };
+    }) };
+  const nRef = cfg.segs.filter(x => x.refTo).length;
+  const nBreak = cfg.segs.length - nRef;
+  if (!confirm('链式生成确认：\n· 代点 ' + cfg.segs.length + ' 段视频（模型按节点配置，缺省 ' + cfg.defaultModel + '）\n· ' + nRef + ' 段完成后截帧挂给同场景下一段\n· ' + nBreak + ' 段为场景链头/链尾，不挂截帧\n\n确认开始？')) return;
+  await postJob(cfg);
+};
+
 document.getElementById('bBtnGo').onclick=()=>postJob(Object.assign(collectCfg('import'),{confirm:'build'}));
 /* 清空工作台的按钮绑定在文件末尾（弹窗 HTML 之后），避免元素未加载 */
 </script>

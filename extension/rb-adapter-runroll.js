@@ -27,6 +27,9 @@
     } catch (e) { console.warn('[RB] net hook 注入失败', e); }
   })();
 
+  // capability_id → model_series_id 映射（2026-09-23 /video/models 实测）
+  const CAP2SERIES = { 53:'34',54:'34',55:'34',56:'34', 132:'38',133:'38',134:'38',135:'38', 57:'16',58:'16',59:'16',60:'16', 61:'17',62:'17',63:'17',64:'17', 128:'37',129:'37',130:'37',131:'37', 5:'1',6:'1',7:'1',8:'1', 33:'10',34:'10',35:'10',36:'10', 1:'32',2:'32',3:'32',4:'32', 113:'33',114:'33',115:'33',116:'33', 107:'29',108:'29',109:'29', 110:'30',111:'30',112:'30', 9:'6',10:'6',11:'6',12:'6', 13:'7',14:'7',15:'7' };
+
   const MODELS = {
     '满血全能参考': 7,   // Seedance 2.0(满血渠道) 全能参考
     '满血文生': 5,       // Seedance 2.0(满血渠道) 默认
@@ -334,13 +337,14 @@
       const to = st.nodes.find(n => norm(n.label) === norm(cfg.toLabel) || n.node_uid === cfg.toUid);
       if (!from) throw new Error('找不到源节点 ' + (cfg.fromLabel || cfg.fromUid));
       if (!to) throw new Error('找不到目标节点 ' + (cfg.toLabel || cfg.toUid));
-      let url = null;
+      let url = cfg.url || null;
       (function walk(v) {
         if (url || v == null || typeof v === 'number') return;
         if (typeof v === 'string') { if (/^https?:\/\//i.test(v) && /\.(mp4|mov|webm|m4v)/i.test(v.split('?')[0])) url = v; return; }
         if (typeof v === 'object') { for (const k of Object.keys(v)) walk(v[k]); }
       })(from.data);
       if (!url) throw new Error('源节点 ' + from.label + ' 里没有视频 URL（kind=' + from.node_kind + '）');
+      if (!/^https?:\/\//i.test(url)) throw new Error('源节点 URL 无效: ' + url.slice(0, 80));
       const t = cfg.t || 60000;
       const snap = url.split('?')[0] + '?x-oss-process=video/snapshot,t_' + t + ',f_jpg,w_800,m_fast,ar_auto';
       let blob;
@@ -364,6 +368,61 @@
       const edgeOk = st3.edges.some(e => e.edge_uid === edge.edge_uid);
       return { ok: edgeOk, from: from.node_uid, to: to.node_uid, snap: snap.slice(0, 160),
         newNode: { uid: imgNode.node_uid, label: imgNode.label, kind: imgNode.node_kind }, edgeUid: edge.edge_uid, edgeOk: edgeOk };
+    },
+    // [chain 2026-09-23] 链式生成：逐段代点→轮询→同场景链内截帧传参考，场景切换断链（工作台已算好 segs/refTo）
+    chainRun: async function (cfg, onProgress) {
+      const rep = (m, p) => { try { onProgress && onProgress(m, p); } catch (e) {} };
+      const normL = s => (s || '').replace(/\s+/g, '').toLowerCase();
+      const segs = cfg.segs || [];
+      if (!segs.length) throw new Error('chain.segs 为空');
+      const log = [];
+      for (let i = 0; i < segs.length; i++) {
+        const sp = segs[i];
+        const pct = 5 + Math.round(i / segs.length * 90);
+        const node = (await this.state()).nodes.find(n => normL(n.label) === normL(sp.label) && n.node_kind === 'video');
+        if (!node) { log.push(sp.label + ': 画布上找不到视频节点，跳过'); continue; }
+        const d = node.data || {};
+        let okUrl = null;
+        if (d.generation_status === 'succeeded') {
+          log.push(sp.label + ': 已有生成结果，跳过代点');
+        } else if (d.generation_status === 'processing' || d.generation_status === 'pending') {
+          log.push(sp.label + ': 已在生成中，等待完成');
+        } else {
+          const cap = d.model || cfg.defaultModel;
+          const series = CAP2SERIES[cap];
+          if (!series) { log.push(sp.label + ': 未知模型 ' + cap + '，跳过'); continue; }
+          if (!d.prompt) { log.push(sp.label + ': 节点无 prompt，跳过'); continue; }
+          rep('[' + sp.label + '] 提交代点生成（模型 ' + cap + '）…', pct);
+          const body = { project_id: ids().projectId, canvas_id: ids().canvasId, node_uid: node.node_uid,
+            prompt: d.prompt, model_series_id: series, capability_id: String(cap), task_id: crypto.randomUUID() };
+          const r = await fetch('/api/v1/canvas-studio/video/generate', { method: 'POST', headers: api(), body: JSON.stringify(body) });
+          const rj = await r.json().catch(() => ({}));
+          if (r.status !== 200) { log.push(sp.label + ': 提交失败 ' + r.status + ' ' + JSON.stringify(rj).slice(0, 120)); continue; }
+          log.push(sp.label + ': 已提交（task ' + (rj.data && rj.data.task_id || body.task_id) + '）');
+        }
+        let done = false;
+        for (let k = 0; k < (cfg.pollMax || 60); k++) {
+          await sleep(10000);
+          rep('[' + sp.label + '] 生成中…已等 ' + ((k + 1) * 10) + 's', pct);
+          const gr = await fetch('/api/v1/canvas-studio/video/generate/status?project_id=' + ids().projectId + '&canvas_id=' + ids().canvasId + '&node_uid=' + node.node_uid, { headers: api() });
+          const gj = (await gr.json().catch(() => ({}))).data || {};
+          if (gj.status === 'succeeded') { okUrl = (gj.urls && gj.urls[0]) || null; done = true; break; }
+          if (gj.status === 'failed') { log.push(sp.label + ': 生成失败 ' + (gj.message || '')); break; }
+        }
+        if (!done) { log.push(sp.label + ': 等待超时，中止后续（避免参考断裂）'); break; }
+        log.push(sp.label + ': 生成完成');
+        if (sp.refTo) {
+          rep('[' + sp.label + '] 截帧挂参考 → ' + sp.refTo, pct);
+          try {
+            const hr = await this.hangRef({ fromUid: node.node_uid, toLabel: sp.refTo, t: sp.t || 60000, url: okUrl ? okUrl.split('?')[0] : null });
+            log.push(sp.label + ' → ' + sp.refTo + ': 截帧已挂（' + hr.newNode.label + '）');
+          } catch (e) { log.push(sp.label + ': 挂参考失败 ' + String(e.message).slice(0, 100)); }
+        } else {
+          log.push(sp.label + ': 场景链尾，不挂截帧');
+        }
+      }
+      rep('链式生成结束', 100);
+      return { log };
     },
     clear: async function () {
       const st = await this.state();

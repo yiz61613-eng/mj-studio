@@ -34,6 +34,16 @@
       try { chrome.runtime.sendMessage({ type: 'RB_JOB_DONE', id: job.id, ok: true, result: r }).catch(() => {}); } catch (e) {}
       return;
     }
+    if (type === 'chain') {
+      // 链式生成：代点+截帧+建参考边，全部会动画布，走与一键直通相同的 confirm=build 保险丝
+      if (!cfg || cfg.confirm !== 'build') throw new Error('chain 任务缺 confirm=build，已拒绝');
+      const a = window.RBCore.pickAdapter();
+      if (!a || !a.chainRun) throw new Error('当前平台适配器不支持链式生成');
+      await report(job.id, '链式生成：' + (cfg.segs || []).length + ' 段排队…', 5);
+      const r = await a.chainRun(cfg, (m, p) => report(job.id, m, p));
+      try { chrome.runtime.sendMessage({ type: 'RB_JOB_DONE', id: job.id, ok: true, result: r }).catch(() => {}); } catch (e) {}
+      return;
+    }
     if (type === 'ref') {
       // 截帧挂参考：会动画布（上传建图节点+连线），必须带 confirm=build（与一键直通同保险丝）
       if (!cfg || cfg.confirm !== 'build') throw new Error('ref 任务缺 confirm=build，已拒绝');

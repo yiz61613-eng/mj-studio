@@ -108,12 +108,46 @@
     const roleAll = dirs['0-角色和声音'].map(f => ({ f: f.name, base: norm(f.name), isAudio: f.isAudio }));
     const sceneFiles = dirs['1-场景'].map(f => ({ f: f.name, base: norm(f.name) }));
     const propFiles = dirs['2-道具'].map(f => ({ f: f.name, base: norm(f.name) }));
-    const fScene = t => sceneFiles.find(n => n.base === t || n.base.startsWith(t));
+    const sceneCore = b => { const m = b.match(/^\d+(?:-\d+)*-(.+?)(?:-[^-]+)?$/); return m ? m[1] : b; };
+    // 场景匹配打分：精确 100 > 文件名含关键词 90+ > 关键词含全名 80+ > 关键词含主名 60+（对齐工作台的双向包含逻辑）
+    const sceneScore = (n, key) => {
+      if (!key) return 0;
+      if (n.base === key) return 100;
+      if (n.base.includes(key)) return 90 + Math.min(key.length, 20) / 10;
+      if (key.includes(n.base)) return 80 + Math.min(n.base.length, 20) / 10;
+      const core = sceneCore(n.base);
+      if (core.length >= 2 && key.includes(core)) return 60 + Math.min(core.length, 20) / 10;
+      return 0;
+    };
+    const fScene = t => {
+      let best = null, bs = 0;
+      for (const n of sceneFiles) { const s = sceneScore(n, t); if (s > bs) { bs = s; best = n; } }
+      return bs >= 60 ? best : null;   // 模糊也够不上就不挂，宁缺毋错
+    };
     const fRole = t => roleAll.find(n => !n.isAudio && (n.base === t || n.base.startsWith(t)));
     const fAud = ch => roleAll.find(n => n.isAudio && n.base.includes(ch) && n.base.includes('音轨'));
     const sceneTxts = new Set(), outfitTxts = new Set();
     Object.values(M.sceneMap || {}).forEach(v => sceneTxts.add(v.txt));
     Object.values(M.outfitMap || {}).forEach(a => a.forEach(o => outfitTxts.add(o.txt)));
+    // 每集×角色的服装分布（供缺口兼底：映射表是 15s 版生成的，30s 合并段会多出角色）
+    const epOutfit = {};
+    Object.entries(M.outfitMap || {}).forEach(([k, arr]) => {
+      const ep = +k.split('-')[0];
+      for (const o of arr) {
+        (epOutfit[ep] = epOutfit[ep] || {}); (epOutfit[ep][o.char] = epOutfit[ep][o.char] || {});
+        epOutfit[ep][o.char][o.txt] = (epOutfit[ep][o.char][o.txt] || 0) + 1;
+      }
+    });
+    const pickOutfit = (ch, ep) => {
+      for (let d = 0; d < 60; d++) {
+        for (const e of d === 0 ? [ep] : [ep - d, ep + d]) {
+          const m = epOutfit[e] && epOutfit[e][ch];
+          if (m) { const t = Object.keys(m).sort((a, b) => m[b] - m[a])[0]; const rf = fRole(t); if (rf) return rf; }
+        }
+        if (ep - d < 1 && ep + d > 60) break;
+      }
+      return null;
+    };
 
     for (const p of S.segs) {
       const sm = (M.sceneMap || {})[p.id], of = (M.outfitMap || {})[p.id] || [];
@@ -123,18 +157,26 @@
         const rf = fRole(o.txt); if (rf) p.chars[o.char] = rf;
         const au = fAud(o.char); if (au) p.audios[o.char] = au;
       }
+      // 角色行里有、映射没覆盖的角色：按就近集数的服装兼底 + 补音轨（30s 合并段常见）
+      const chLine = p.lines.find(l => l.startsWith('角色：'));
+      if (chLine) for (const ch of chLine.replace(/^角色：/, '').split(/[、，,]/).map(t => t.trim().split(/（/)[0]).filter(Boolean)) {
+        if (!p.chars[ch]) { const rf = pickOutfit(ch, p.ep); if (rf) p.chars[ch] = rf; }
+        if (!p.audios[ch]) { const au = fAud(ch); if (au) p.audios[ch] = au; }
+      }
       if (!of.length) {
-        const chLine = p.lines.find(l => l.startsWith('角色：'));
-        if (chLine) for (const ch of chLine.replace(/^角色：/, '').split(/[、，,]/).map(t => t.trim()).filter(Boolean)) {
-          const au = fAud(ch); if (au) p.audios[ch] = au;
-          const rf = roleAll.filter(n => !n.isAudio && outfitTxts.has(n.base) && n.base.includes(ch)).sort((a, b) => a.base < b.base ? -1 : 1)[0];
-          if (rf) p.chars[ch] = rf;
-        }
         const scLine = p.lines.find(l => /^\d+(?:-\d+)*\s+(夜|日|晨|清晨|黄昏|傍晚)\s*\/\s*(内|外)\s+/.test(l));
         if (scLine) {
           const nm = scLine.replace(/^\d+(?:-\d+)*\s+[^\s]+\s*\/\s*[^\s]+\s+/, '').trim();
           p.scenePhrase = nm;
-          if (!p.scene) p.scene = sceneFiles.find(n => !sceneTxts.has(n.base) && n.base.includes(nm)) || null;
+        if (!p.scene) {
+          let best = null, bs = 0;
+          for (const n of sceneFiles) {
+            if (sceneTxts.has(n.base)) continue;   // 已被映射表占用的不抢
+            const s = sceneScore(n, nm);
+            if (s > bs) { bs = s; best = n; }
+          }
+          p.scene = bs >= 60 ? best : null;
+        }
         }
       }
       const propLine = p.lines.find(l => l.startsWith('道具：'));
@@ -160,7 +202,15 @@
     const epsKey = JSON.stringify(cfg.episodes);
     if (!S.segs.length || S.parsedEps !== epsKey) { await parse(); S.parsedEps = epsKey; }
     const a = await ensureAdapter();
-    const st = await a.state();
+    // 画布实况检测：连读两次，节点/连线数一致才采信（collab 端点偶发返回滞后快照，读旧数据会把缺素材误报成 0）
+    let st = await a.state(), stable = true;
+    for (let i = 0; i < 3; i++) {
+      await sleep(1500);
+      const st2 = await a.state();
+      if (st2.nodes.length === st.nodes.length && st2.edges.length === st.edges.length) { st = st2; break; }
+      st = st2;
+      if (i === 2) stable = false;
+    }
     const idx = a.uidIndex(st.nodes);            // base -> uid
     const uidOf = f => idx[norm(f)] || null;
     const missing = [];
@@ -215,11 +265,13 @@
       colCursor += Math.ceil(list.length / cfg.perColumn) + cfg.epGapCols - 1;
     }
     S.plan = { charPlaced, grid, segPlans, missing, capabilities: a.capabilities };
+    const vids = st.nodes.filter(n => n.node_kind === 'video');
     return {
       platform: a.name, assetsOnCanvas: st.nodes.length,
+      canvas: { nodes: st.nodes.length, videos: vids.length, assets: st.nodes.length - vids.length, edges: st.edges.length, stable },
       videoNodes: segPlans.length, edges: segPlans.reduce((n, p) => n + p.refs.length, 0),
       charAssets: charPlaced.length, gridAssets: grid.length,
-      missingUids: missing.length, missing: missing.slice(0, 8),
+      missingUids: missing.length, missing: missing.slice(0, 8), missingAll: [...new Set(missing)],
       canCreateNodes: a.capabilities.createNodes, note: a.capabilities.note || '',
     };
   }
@@ -277,7 +329,9 @@
     const files = [];
     for (const u of need) {
       const url = cfg.assetRoot + '/' + u.dir.split('-')[0] + '-' + enc(u.dir.split('-').slice(1).join('-')) + '/' + enc(u.f);
-      const blob = await (await fetch(url)).blob();
+      const rr = await fetch(url);
+      if (!rr.ok) throw new Error('素材文件读取失败 ' + rr.status + '：' + u.f + '（服务虚拟仓与磁盘都没有）');
+      const blob = await rr.blob();
       files.push({ name: u.f, blob });
     }
     const res = await a.upload(files);

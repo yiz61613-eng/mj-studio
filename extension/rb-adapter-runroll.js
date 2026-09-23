@@ -99,8 +99,36 @@
       const cfg = window.RBCore.cfg;
       const P = S.plan;
       if (window.RBCore.cfg.clearFirst) await this.clear();
-      const st = await this.state();
+      // collab 读偶发返回滞后快照：连读两次一致才采信，最多重试 4 轮
+      const readStable = async (tries = 4) => {
+        let s = await this.state();
+        for (let i = 0; i < tries; i++) {
+          await sleep(1500);
+          const s2 = await this.state();
+          if (s2.nodes.length === s.nodes.length && s2.edges.length === s.edges.length) return s2;
+          s = s2;
+        }
+        return s;
+      };
+      let st = await readStable();
       const meta = Object.fromEntries(st.nodes.map(n => [n.node_uid, { kind: n.node_kind, label: n.label }]));
+      const myUids = new Set(P.segPlans.map(sp => { sp.uid = 'video-' + ids().canvasId + '-rb-' + sp.seg.id; return sp.uid; }));
+      // 重建前删旧视频节点/旧边：删完重读验证，没删干净就再来一轮（滞后快照下第一轮往往删不到东西）
+      const touch = e => myUids.has(e.target_node_uid || e.to_node_uid) || myUids.has(e.source_node_uid || e.from_node_uid);
+      for (let round = 0; round < 4; round++) {
+        st = await readStable(2);
+        const oldNodes = st.nodes.filter(n => myUids.has(n.node_uid));
+        const oldEdges = st.edges.filter(touch);
+        if (!oldNodes.length && !oldEdges.length) break;   // 节点和边都清干净才往下走，防悬空旧边占坑
+        for (let i = 0; i < oldEdges.length; i += this.limits.edgeCreate) {
+          await this.batch({ nodes: { create: [], update: [], delete: [] }, edges: { create: [], delete: oldEdges.slice(i, i + this.limits.edgeCreate).map(e => ({ edge_uid: e.edge_uid })) } }).catch(() => {});
+          await sleep(150);
+        }
+        for (let i = 0; i < oldNodes.length; i += this.limits.nodeDelete) {
+          await this.batch({ nodes: { create: [], update: [], delete: oldNodes.slice(i, i + this.limits.nodeDelete).map(n => ({ node_uid: n.node_uid, node_kind: n.node_kind, label: n.label || '' })) }, edges: { create: [], delete: [] } }).catch(() => {});
+          await sleep(200);
+        }
+      }
       // 资产排位
       const layout = [...P.charPlaced, ...P.grid].filter(a2 => meta[a2.uid]);
       for (let i = 0; i < layout.length; i += this.limits.nodeCreate) {
@@ -108,21 +136,64 @@
         await sleep(150);
       }
       // 视频节点 + 连线
-      let ei = 0;
       for (let i = 0; i < P.segPlans.length; i += this.limits.nodeCreate) {
-        const chunk = P.segPlans.slice(i, i + this.limits.nodeCreate);
-        const creates = chunk.map(sp => { sp.uid = 'video-' + ids().canvasId + '-rb-' + sp.seg.id; return this.makeVideoNode(sp, cfg); });
-        const edges = chunk.flatMap(sp => sp.refs.map((u, k) => ({ edge_uid: 'e-rb-' + sp.seg.id + '-' + k, from_node_uid: u, to_node_uid: sp.uid, source_node_uid: u, target_node_uid: sp.uid, source_handle: 'source', target_handle: 'target' })));
+        const creates = P.segPlans.slice(i, i + this.limits.nodeCreate).map(sp => this.makeVideoNode(sp, cfg));
         await this.batch({ nodes: { create: creates, update: [], delete: [] }, edges: { create: [], delete: [] } });
-        for (let j = 0; j < edges.length; j += this.limits.edgeCreate) {
-          await this.batch({ nodes: { create: [], update: [], delete: [] }, edges: { create: edges.slice(j, j + this.limits.edgeCreate), delete: [] } });
-        }
-        ei += edges.length;
+        await sleep(300);
+      }
+      const allEdges = P.segPlans.flatMap(sp => sp.refs.map((u, k) => ({ edge_uid: 'e-rb-' + sp.seg.id + '-' + k, from_node_uid: u, to_node_uid: sp.uid, source_node_uid: u, target_node_uid: sp.uid, source_handle: 'source', target_handle: 'target' })));
+      for (let j = 0; j < allEdges.length; j += this.limits.edgeCreate) {
+        await this.batch({ nodes: { create: [], update: [], delete: [] }, edges: { create: allEdges.slice(j, j + this.limits.edgeCreate), delete: [] } });
         await sleep(200);
       }
-      const fin = await this.state();
+      // 校验补齐：连线/节点可能因滞后被服务端丢弃，缺了就重试，最多 3 轮
+      let missedEdges = 0, missedNodes = 0;
+      for (let round = 0; round < 3; round++) {
+        st = await readStable(2);
+        const haveE = new Set(st.edges.map(e => e.edge_uid));
+        const haveN = new Set(st.nodes.map(n => n.node_uid));
+        const missE = allEdges.filter(e => !haveE.has(e.edge_uid));
+        const missN = P.segPlans.filter(sp => !haveN.has(sp.uid));
+        missedEdges = missE.length; missedNodes = missN.length;
+        if (!missE.length && !missN.length) { missedEdges = 0; missedNodes = 0; break; }
+        for (const sp of missN) await this.batch({ nodes: { create: [this.makeVideoNode(sp, cfg)], update: [], delete: [] }, edges: { create: [], delete: [] } }).catch(() => {});
+        for (let j = 0; j < missE.length; j += this.limits.edgeCreate) {
+          await this.batch({ nodes: { create: [], update: [], delete: [] }, edges: { create: missE.slice(j, j + this.limits.edgeCreate), delete: [] } }).catch(() => {});
+          await sleep(200);
+        }
+      }
+      await sleep(2500);   // 等服务端写入追平再读终态
+      const fin = await readStable(2);
       const vids = fin.nodes.filter(n => n.node_kind === 'video');
-      return { videos: vids.length, assets: fin.nodes.length - vids.length, edges: fin.edges.length };
+      return { videos: vids.length, assets: fin.nodes.length - vids.length, edges: fin.edges.length,
+        edgesExpected: allEdges.length, verify: { missedNodes, missedEdges } };
+    },
+    // 探针：把指定段位节点完整数据抛出来，同时全画布扫描视频节点里的 URL 字段，摸清生成结果存在哪
+    probe: async function (segId) {
+      let st = await this.state();
+      for (let i = 0; i < 3; i++) {
+        await sleep(1500);
+        const s2 = await this.state();
+        if (s2.nodes.length === st.nodes.length && s2.edges.length === st.edges.length) { st = s2; break; }
+        st = s2;
+      }
+      const uid = 'video-' + ids().canvasId + '-rb-' + segId;
+      const target = st.nodes.find(n => n.node_uid === uid) || null;
+      const urls = [];
+      const walk = (v, path2, depth) => {
+        if (v == null || depth > 6) return;
+        if (typeof v === 'string') { if (/^https?:\/\//i.test(v)) urls.push({ path: path2, val: v.slice(0, 300) }); return; }
+        if (typeof v !== 'object') return;
+        for (const k of Object.keys(v)) walk(v[k], path2 + '.' + k, depth + 1);
+      };
+      const vids = st.nodes.filter(n => n.node_kind === 'video');
+      const videos = vids.map(n => {
+        urls.length = 0; walk(n.data, 'data', 0);
+        return { uid: n.node_uid, label: n.label, status: (n.data && n.data.generation_status) || null, urls: urls.slice() };
+      });
+      return { canvasId: ids().canvasId, target,
+        videosWithUrls: videos.filter(v => v.urls.length),
+        videoCount: vids.length, totalNodes: st.nodes.length, totalEdges: st.edges.length };
     },
     clear: async function () {
       const st = await this.state();

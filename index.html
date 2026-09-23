@@ -240,7 +240,7 @@ body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif; backgroun
   <div class="dbody">
     <div class="sec" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
       <button class="btn primary" id="btnAutoMount">⚡ 重新自动挂载全部分镜</button>
-      <button class="btn" id="btnReclassify">按当前分镜重新识别未分类</button>
+      <button class="btn" id="btnReclassify">按当前分镜重新识别资产</button>
     </div>
     <div class="sec"><h4>人物（同一角色多套衣服会作为变体，节点上自动选一套，详情里可换装）</h4><div class="libgrid" id="libRoles"></div></div>
     <div class="sec"><h4>场景</h4><div class="libgrid" id="libScenes"></div></div>
@@ -1215,10 +1215,13 @@ function classifyAsset(filename, dir){
     return (t && base===t) || (t && base.includes(t)) || (k.char && k.outfit && base.includes(k.char) && base.includes(k.outfit));
   });
   if(ok2) mapCat='role'; else if(sk) mapCat='scene';
-  if(hitChar) cat='role';
-  else if(mapCat && !cat) cat=mapCat;
-  else if((hitScene||hitCode) && !cat) cat='scene';
-  else if(hitProp && !cat) cat='prop';
+  if(!cat){
+    // 目录信号优先：已从目录判定 cat 的不再被名字猜测覆盖（如「陆沉办公室」是场景，不因含角色名变人物）
+    if(hitChar) cat='role';
+    else if(mapCat) cat=mapCat;
+    else if(hitScene||hitCode) cat='scene';
+    else if(hitProp) cat='prop';
+  }
   const a = { cat: cat||'unknown' };
   if(a.cat==='role'){
     a.char = hitChar || base;
@@ -1375,13 +1378,13 @@ function reclassifyUnknowns(){
   buildVocab();
   let n=0;
   state.assets.forEach(a=>{
-    if(a.cat!=='unknown') return;
+    if(a.manual) return;   // 手动指定过类别的资产不动
     const cls = classifyAsset(a.name, a.dir);
-    if(cls.cat!=='unknown'){ Object.assign(a, cls); n++; }
+    if(cls.cat!==a.cat){ Object.assign(a, cls); n++; }
   });
   saveState(); renderLib();
   if(n) autoMountAll();
-  toast(n ? '重新识别：'+n+' 张已分类' : '没有可自动识别的图片（检查命名）');
+  toast(n ? '重新识别：'+n+' 张已重新分类' : '分类无变化');
 }
 function renderLib(){
   const g = {role:[], scene:[], prop:[], audio:[], unknown:[]};
@@ -1405,6 +1408,7 @@ function renderLib(){
         sel.onchange = ()=>{
           const a2 = state.assets.find(x=>x.id===sel.dataset.reid);
           if(a2 && sel.value){
+            a2.manual = true;   // 手动指定，重识别不再覆盖
             const cls = classifyAsset(a2.name, a2.dir);
             if(cls.cat===sel.value) Object.assign(a2, cls);
             else if(cls.cat==='audio'){ a2.cat='audio'; }

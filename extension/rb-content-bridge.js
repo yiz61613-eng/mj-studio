@@ -30,7 +30,17 @@
       const a = window.RBCore.pickAdapter();
       if (!a || !a.probe) throw new Error('当前平台适配器不支持探针');
       await report(job.id, '探针读取画布节点 ' + (cfg.segId || '') + '…', 30);
-      const r = await a.probe(cfg.segId || '');
+      const r = await a.probe(cfg.segId || '', cfg || {});
+      try { chrome.runtime.sendMessage({ type: 'RB_JOB_DONE', id: job.id, ok: true, result: r }).catch(() => {}); } catch (e) {}
+      return;
+    }
+    if (type === 'ref') {
+      // 截帧挂参考：会动画布（上传建图节点+连线），必须带 confirm=build（与一键直通同保险丝）
+      if (!cfg || cfg.confirm !== 'build') throw new Error('ref 任务缺 confirm=build，已拒绝');
+      const a = window.RBCore.pickAdapter();
+      if (!a || !a.hangRef) throw new Error('当前平台适配器不支持挂参考');
+      await report(job.id, '截帧挂参考 ' + (cfg.fromLabel || cfg.fromUid) + ' → ' + (cfg.toLabel || cfg.toUid) + '…', 20);
+      const r = await a.hangRef(cfg);
       try { chrome.runtime.sendMessage({ type: 'RB_JOB_DONE', id: job.id, ok: true, result: r }).catch(() => {}); } catch (e) {}
       return;
     }

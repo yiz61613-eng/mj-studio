@@ -366,8 +366,280 @@
       await sleep(800);
       const st3 = await this.state();
       const edgeOk = st3.edges.some(e => e.edge_uid === edge.edge_uid);
-      return { ok: edgeOk, from: from.node_uid, to: to.node_uid, snap: snap.slice(0, 160),
-        newNode: { uid: imgNode.node_uid, label: imgNode.label, kind: imgNode.node_kind }, edgeUid: edge.edge_uid, edgeOk: edgeOk };
+      if (!edgeOk) throw new Error('截帧参考边未写入画布');
+      const inputOk = await this.syncNodeInput(to.node_uid);
+      if (!inputOk.ok) throw new Error('截帧边已建，但目标节点 input 未同步：' + to.label);
+      return { ok: edgeOk && inputOk.ok, from: from.node_uid, to: to.node_uid, snap: snap.slice(0, 160),
+        newNode: { uid: imgNode.node_uid, label: imgNode.label, kind: imgNode.node_kind }, edgeUid: edge.edge_uid, edgeOk: edgeOk, inputOk: inputOk.ok };
+    },
+    // 将画布实际入边写回视频节点 data.input；保留节点其他生成数据。
+    syncNodeInput: async function (nodeUid) {
+      let st = await this.state();
+      let node = st.nodes.find(n => n.node_uid === nodeUid);
+      if (!node) return { ok: false, error: '目标节点不存在' };
+      const incomingEdges = st.edges.filter(e => (e.target_node_uid || e.to_node_uid) === nodeUid);
+      if (incomingEdges.some(e => !(e.source_node_uid || e.from_node_uid) || !e.edge_uid)) return { ok: false, error: '存在缺少 source uid/edge uid 的入边' };
+      const incoming = incomingEdges.map(e => e.edge_uid);
+      const current = Array.isArray(node.data && node.data.input) ? node.data.input : [];
+      if (incoming.every(uid => current.includes(uid)) && current.length === incoming.length) return { ok: true, input: current };
+      const data = { ...(node.data || {}), input: incoming };
+      await this.batch({ nodes: { create: [], update: [{ node_uid: node.node_uid, node_kind: node.node_kind, label: node.label || '', data }], delete: [] }, edges: { create: [], delete: [] } });
+      let after = [];
+      for (let attempt = 0; attempt < 4; attempt++) {
+        await sleep(800);
+        st = await this.state(); node = st.nodes.find(n => n.node_uid === nodeUid);
+        after = Array.isArray(node && node.data && node.data.input) ? node.data.input : [];
+        if (incoming.every(uid => after.includes(uid)) && after.length === incoming.length) break;
+      }
+      return { ok: !!node && incoming.every(uid => after.includes(uid)) && after.length === incoming.length, input: after, expected: incoming };
+    },
+    // 只补资产边，不删/重建视频节点；repair=false 时纯校验，供生成前门禁使用。
+    ensureChainRefs: async function (segPlans, labels, repair) {
+      const normL = s => (s || '').replace(/\s+/g, '').toLowerCase();
+      const wanted = new Set(labels || []), problems = [], rows = [];
+      const plannedLabels = new Set((segPlans || []).map(x => x.seg.id));
+      for (const label of wanted) if (!plannedLabels.has(label)) problems.push({ segment: label, reason: '未生成该段的资产规划' });
+      if (problems.length) return { ready: false, problems, addedEdges: 0 };
+      let st = await this.state();
+      for (const sp of (segPlans || []).filter(x => wanted.has(x.seg.id))) {
+        const matches = st.nodes.filter(n => normL(n.label) === normL(sp.seg.id) && n.node_kind === 'video');
+        if (matches.length !== 1) { problems.push({ segment: sp.seg.id, reason: matches.length ? '画布上存在多个同名视频节点' : '画布上缺少视频节点' }); continue; }
+        const target = matches[0], refs = [...new Set(sp.refs || [])];
+        const absentSources = refs.filter(uid => !st.nodes.some(n => n.node_uid === uid));
+        if (absentSources.length) { problems.push({ segment: sp.seg.id, reason: '参考资产节点不在画布', missingUids: absentSources }); continue; }
+        rows.push({ sp, target, refs });
+      }
+      if (problems.length) return { ready: false, problems, addedEdges: 0 };
+      let add = 0;
+      const removedRefs = [];
+      if (repair) {
+        // 清单外参考边自动删除：以工作台清单为准，删掉指向视频节点的多余参考线，回报被删资产名
+        const stale = [];
+        for (const row of rows) {
+          for (const e of st.edges.filter(e => (e.target_node_uid || e.to_node_uid) === row.target.node_uid)) {
+            const src = e.source_node_uid || e.from_node_uid;
+            if (!src || !e.edge_uid) continue;
+            if (!row.refs.includes(src)) stale.push({ edge_uid: e.edge_uid, src, segment: row.sp.seg.id });
+          }
+        }
+        const uniqStale = [...new Map(stale.map(x => [x.edge_uid, x])).values()];
+        const batchDel = this.limits.edgeDelete || 150;
+        for (let i = 0; i < uniqStale.length; i += batchDel) {
+          await this.batch({ nodes: { create: [], update: [], delete: [] }, edges: { create: [], delete: uniqStale.slice(i, i + batchDel).map(x => ({ edge_uid: x.edge_uid })) } });
+          await sleep(120);
+        }
+        if (uniqStale.length) {
+          await sleep(600);
+          st = await this.state();
+          for (const x of uniqStale) {
+            const n = st.nodes.find(n => n.node_uid === x.src);
+            removedRefs.push({ segment: x.segment, asset: (n && n.label) || '（源节点已不存在）', uid: x.src });
+          }
+        }
+        const create = [], usedEdgeUids = new Set(st.edges.map(e => e.edge_uid).filter(Boolean));
+        for (const row of rows) {
+          for (let i = 0; i < row.refs.length; i++) {
+            const uid = row.refs[i];
+            const exists = st.edges.some(e => (e.source_node_uid || e.from_node_uid) === uid && (e.target_node_uid || e.to_node_uid) === row.target.node_uid);
+            if (exists) continue;
+            const baseEdgeUid = 'e-rb-chain-' + row.sp.seg.id + '-' + i;
+            let edgeUid = baseEdgeUid, suffix = 1;
+            while (usedEdgeUids.has(edgeUid)) edgeUid = baseEdgeUid + '-c' + suffix++;
+            usedEdgeUids.add(edgeUid);
+            create.push({ edge_uid: edgeUid, from_node_uid: uid, to_node_uid: row.target.node_uid, source_node_uid: uid, target_node_uid: row.target.node_uid, source_handle: 'source', target_handle: 'target' });
+          }
+        }
+        for (let i = 0; i < create.length; i += this.limits.edgeCreate) {
+          await this.batch({ nodes: { create: [], update: [], delete: [] }, edges: { create: create.slice(i, i + this.limits.edgeCreate), delete: [] } });
+          await sleep(200);
+        }
+        add = create.length;
+        for (let attempt = 0; attempt < 4; attempt++) {
+          await sleep(800);
+          st = await this.state();
+          const allWritten = rows.every(row => row.refs.every(uid => st.edges.some(e => (e.source_node_uid || e.from_node_uid) === uid && (e.target_node_uid || e.to_node_uid) === row.target.node_uid)));
+          if (allWritten) break;
+        }
+      }
+      const verified = [];
+      for (const row of rows) {
+        const node = st.nodes.find(n => n.node_uid === row.target.node_uid);
+        const incoming = st.edges.filter(e => (e.target_node_uid || e.to_node_uid) === row.target.node_uid);
+        if (incoming.some(e => !e.edge_uid || !(e.source_node_uid || e.from_node_uid))) { problems.push({ segment: row.sp.seg.id, reason: '画布参考边缺少 source uid/edge uid，无法安全核验' }); continue; }
+        const sourceOf = e => e.source_node_uid || e.from_node_uid;
+        const incomingSources = [...new Set(incoming.map(sourceOf))];
+        const missing = row.refs.filter(uid => !incomingSources.includes(uid));
+        const unexpected = incomingSources.filter(uid => !row.refs.includes(uid));
+        if (missing.length) { problems.push({ segment: row.sp.seg.id, reason: '场景/角色/音频资产未连入视频节点', missingUids: missing }); continue; }
+        if (repair) {
+          const si = await this.syncNodeInput(row.target.node_uid);
+          if (!si.ok) { problems.push({ segment: row.sp.seg.id, reason: 'data.input 未与画布全部入边同步', expectedInputCount: incoming.length, actualInputCount: (si.input || []).length }); continue; }
+          if (unexpected.length) { problems.push({ segment: row.sp.seg.id, reason: '存在工作台资产清单之外的参考边；未删除，请核对后重试', unexpectedUids: unexpected, unexpectedAssets: unexpected.map(uid => (st.nodes.find(n => n.node_uid === uid) || {}).label || uid) }); continue; }
+          verified.push({ segment: row.sp.seg.id, referenceCount: row.refs.length, inputCount: si.input.length });
+        } else {
+          const inputs = Array.isArray(node && node.data && node.data.input) ? node.data.input : [];
+          const incomingIds = incoming.map(e => e.edge_uid).filter(Boolean);
+          const inputsExact = inputs.length === incomingIds.length && incomingIds.every(uid => inputs.includes(uid));
+          if (!inputsExact) { problems.push({ segment: row.sp.seg.id, reason: 'video.data.input 与全部实际入边不完全一致', expectedInputCount: incomingIds.length, actualInputCount: inputs.length }); continue; }
+          if (unexpected.length) { problems.push({ segment: row.sp.seg.id, reason: '存在工作台资产清单之外的参考边', unexpectedUids: unexpected, unexpectedAssets: unexpected.map(uid => (st.nodes.find(n => n.node_uid === uid) || {}).label || uid) }); continue; }
+          verified.push({ segment: row.sp.seg.id, referenceCount: row.refs.length, inputCount: inputs.length });
+        }
+      }
+      return { ready: problems.length === 0, problems, addedEdges: add, segments: verified, removedRefs };
+    },
+    // 从工作台传入的显式挂载清单解析/上传资产；只增资产节点，不删建视频节点。
+    resolveChainManifest: async function (segs, assetRoot, uploadMissing) {
+      const key = s => (s || '').replace(/\.(png|jpg|jpeg|webp|wav|mp3|m4a|flac)$/i, '').replace(/\s+/g, '').toLowerCase();
+      const problems = [], missingFiles = new Map(), fallbacks = new Map();
+      let st = await this.state();
+      const nodeKindOk = (n, cat) => cat === 'audio' ? /audio/i.test(n.node_kind || '') : /image|upload/i.test(n.node_kind || '') && n.node_kind !== 'video';
+      const findAsset = (nodes, a) => nodes.filter(n => n.node_kind !== 'video' && key(n.label) === key(a.file) && nodeKindOk(n, a.category));
+      // 同名节点取准：以「最新导入」为准——优先节点时间戳字段，缺了用 uid 序号兜底；其余重复节点在准备阶段删除（被引用的保留但不再使用）
+      const nodeTime = n => {
+        const cands = [n.created_at, n.create_time, n.updated_at, n.update_time, n.gmt_created, n.data && n.data.created_at, n.data && n.data.create_time];
+        for (const v of cands) {
+          if (v == null || v === '') continue;
+          if (typeof v === 'number') return v;
+          const t = Date.parse(v); if (!isNaN(t)) return t;
+        }
+        const parts = String(n.node_uid || '').split('-').filter(s => /^\d+$/.test(s));   // 'image-667-155-xxx' → ['667','155']，取最后一段序号（画布 ID 在前）
+        return parts.length ? parseInt(parts[parts.length - 1], 10) : 0;
+      };
+      const pickNewest = found => found.slice().sort((a, b) => nodeTime(b) - nodeTime(a))[0];
+      const dupGroups = [];   // {segment, category, character, asset, keep, stale:[node], keptBecauseReferenced}
+      const recordDup = (segment, category, character, asset, found) => {
+        const keep = pickNewest(found);
+        dupGroups.push({ segment, category, character, asset, keep, stale: found.filter(n => n.node_uid !== keep.node_uid) });
+        return keep;
+      };
+      // 画布兜底：工作台清单缺项时，先看画布上是否已有可用资产节点（场景精确同名；角色/音频按角色名识别），有就直接拿来做参考，不再急着报缺
+      const canvasAudioChar = label => { const base = String(label || '').replace(/\.[^.]+$/, '').replace(/_?音轨$/, ''); const m = base.match(/^-?[0-9]+[-_](.+)$/); return key(m ? m[1] : base); };
+      const sceneNameKeys = new Set();
+      (segs || []).forEach(sp => {
+        [sp.scene, sp.required && sp.required.sceneText].forEach(t => { const k = key(t); if (k) sceneNameKeys.add(k); });
+        (sp.assets || []).forEach(a => { if (a.category === 'scene' && a.file) sceneNameKeys.add(key(a.file)); });
+      });
+      const sceneClaimed = new Set();
+      const canvasFallback = (category, character, sceneText, segment) => {
+        if (category === 'scene') {
+          const k = key(sceneText);
+          if (!k) return { reason: '缺少场景名' };
+          const m = st.nodes.filter(n => n.node_kind !== 'video' && key(n.label) === k);
+          if (!m.length) return { reason: '画布上没有同名场景节点' };
+          const keep = m.length === 1 ? m[0] : recordDup(segment || '', 'scene', '', k, m);
+          sceneClaimed.add(keep.node_uid);
+          return { node: keep };
+        }
+        const ck = key(character);
+        if (!ck) return { reason: '缺少角色名' };
+        const kind = category === 'audio' ? '音轨' : '角色图';
+        const m = st.nodes.filter(n => {
+          if (sceneClaimed.has(n.node_uid) || sceneNameKeys.has(key(n.label))) return false;
+          if (!nodeKindOk(n, category)) return false;
+          const lk = key(n.label);
+          if (lk.startsWith(ck)) return true;
+          const core = category === 'audio' ? canvasAudioChar(n.label) : lk.replace(/^-?[0-9]+[-_]/, '');
+          return core === ck || core.startsWith(ck);
+        });
+        if (!m.length) return { reason: '画布上没有匹配' + kind + '的节点' };
+        const keep = m.length === 1 ? m[0] : recordDup(segment || '', category, character, character, m);
+        return { node: keep };
+      };
+      // 第一遍：清单完整性（允许画布兜底），逐段收集画布兜底引用
+      for (const sp of (segs || [])) {
+        const assets = sp.assets || [], required = sp.required || {}, fb = [];
+        fallbacks.set(sp.label, fb);
+        if (!Array.isArray(required.characters)) problems.push({ segment: sp.label, category: 'role/audio', reason: '工作台清单缺少角色/音轨需求表' });
+        if (required.scene !== true) problems.push({ segment: sp.label, category: 'scene', asset: required.sceneText || '', reason: '工作台清单未确认本段场景需求' });
+        else if (!assets.some(a => a.category === 'scene' && a.file)) {
+          const f = canvasFallback('scene', '', required.sceneText || sp.scene || '', sp.label);
+          if (f.node) fb.push({ category: 'scene', character: '', asset: f.node.label, uid: f.node.node_uid, via: 'canvas' });
+          else problems.push({ segment: sp.label, category: 'scene', asset: required.sceneText || '', reason: '工作台与画布均未找到场景资产；请先在工作台导入场景图', detail: f.reason });
+        }
+        for (const ch of required.characters || []) {
+          if (!assets.some(a => a.category === 'role' && a.character === ch && a.file)) {
+            const f = canvasFallback('role', ch, '', sp.label);
+            if (f.node) fb.push({ category: 'role', character: ch, asset: f.node.label, uid: f.node.node_uid, via: 'canvas' });
+            else problems.push({ segment: sp.label, category: 'role', character: ch, reason: '工作台与画布均未找到角色参考图；请先在工作台导入', detail: f.reason });
+          }
+          if (!assets.some(a => a.category === 'audio' && a.character === ch && a.file)) {
+            const f = canvasFallback('audio', ch, '', sp.label);
+            if (f.node) fb.push({ category: 'audio', character: ch, asset: f.node.label, uid: f.node.node_uid, via: 'canvas' });
+            else problems.push({ segment: sp.label, category: 'audio', character: ch, reason: '工作台与画布均未找到角色音轨；请先在工作台导入', detail: f.reason });
+          }
+        }
+        for (const a of assets) if (!a.file) problems.push({ segment: sp.label, category: a.category || 'unknown', character: a.character || '', reason: a.reason || '工作台挂载项没有素材文件' });
+      }
+      if (problems.length) return { ready: false, problems, uploaded: 0, plans: [] };
+      const rows = [];
+      for (const sp of (segs || [])) {
+        const targets = st.nodes.filter(n => n.node_kind === 'video' && key(n.label) === key(sp.label));
+        if (targets.length !== 1) { problems.push({ segment: sp.label, category: 'video', reason: targets.length ? '画布上存在多个同名视频节点' : '画布上缺少视频节点' }); continue; }
+        const refs = (fallbacks.get(sp.label) || []).map(f => f.uid);
+        for (const asset of (sp.assets || [])) {
+          const found = findAsset(st.nodes, asset);
+          if (found.length >= 1) {
+            // 多个同名资产节点：以最新导入为准，其余在准备阶段删除
+            const keep = found.length === 1 ? found[0] : recordDup(sp.label, asset.category, asset.character || '', asset.file, found);
+            refs.push(keep.node_uid);
+          }
+          else missingFiles.set(asset.category + '|' + asset.file, asset);
+        }
+        rows.push({ sp, target: targets[0], refs });
+      }
+      if (problems.length) return { ready: false, problems, uploaded: 0, plans: [] };
+      // 同名去重：仅资产节点、仅准备阶段；仍被参考线引用的旧节点保留但不再使用
+      const deduped = [];
+      if (dupGroups.length && uploadMissing) {
+        const referenced = new Set(st.edges.map(e => e.source_node_uid || e.from_node_uid).filter(Boolean));
+        const seenDel = new Set(), del = [];
+        for (const g of dupGroups) for (const n of g.stale) {
+          if (seenDel.has(n.node_uid)) continue;
+          seenDel.add(n.node_uid);
+          if (referenced.has(n.node_uid)) { g.keptBecauseReferenced = (g.keptBecauseReferenced || 0) + 1; continue; }
+          del.push(n);
+        }
+        const batchN = this.limits.nodeDelete || 50;
+        for (let i = 0; i < del.length; i += batchN) {
+          await this.batch({ nodes: { create: [], update: [], delete: del.slice(i, i + batchN).map(n => ({ node_uid: n.node_uid, node_kind: n.node_kind, label: n.label || '' })) }, edges: { create: [], delete: [] } });
+          await sleep(150);
+        }
+        if (del.length) { await sleep(800); st = await this.state(); }
+        for (const g of dupGroups) deduped.push({ segment: g.segment || '', category: g.category, character: g.character || '', asset: g.asset, kept: g.keep.node_uid, keptLabel: g.keep.label, removed: g.stale.length - (g.keptBecauseReferenced || 0), keptBecauseReferenced: g.keptBecauseReferenced || 0 });
+      }
+      let uploaded = 0;
+      if (missingFiles.size) {
+        if (!uploadMissing) return { ready: false, problems: [...missingFiles.values()].map(a => ({ category: a.category, character: a.character || '', asset: a.file, reason: '画布上缺少该工作台资产' })), uploaded: 0, plans: [] };
+        const toUpload = [];
+        for (const asset of missingFiles.values()) {
+          const dir = asset.category === 'scene' ? '1-场景' : asset.category === 'prop' ? '2-道具' : '0-角色和声音';
+          const url = assetRoot.replace(/\/$/, '') + '/' + dir.split('-')[0] + '-' + encodeURIComponent(dir.split('-').slice(1).join('-')) + '/' + encodeURIComponent(asset.file);
+          const r = await fetch(url);
+          if (!r.ok) { problems.push({ category: asset.category, character: asset.character || '', asset: asset.file, reason: '工作台素材服务读取失败 HTTP ' + r.status }); continue; }
+          toUpload.push({ blob: await r.blob(), name: asset.file });
+        }
+        if (problems.length) return { ready: false, problems, uploaded: 0, plans: [] };
+        const up = await this.upload(toUpload);
+        uploaded = up.uploaded || 0;
+        await sleep(3000);
+        st = await this.state();
+      }
+      const plans = [];
+      for (const sp of (segs || [])) {
+        const target = st.nodes.filter(n => n.node_kind === 'video' && key(n.label) === key(sp.label));
+        if (target.length !== 1) { problems.push({ segment: sp.label, category: 'video', reason: target.length ? '上传后视频节点重名' : '上传后画布缺少视频节点' }); continue; }
+        const refs = (fallbacks.get(sp.label) || []).map(f => {
+          if (!st.nodes.some(n => n.node_uid === f.uid)) { problems.push({ segment: sp.label, category: f.category, character: f.character || '', asset: f.asset, reason: '上传后画布兜底资产节点消失' }); return null; }
+          return f.uid;
+        }).filter(Boolean);
+        for (const asset of (sp.assets || [])) {
+          const found = findAsset(st.nodes, asset);
+          if (!found.length) problems.push({ segment: sp.label, category: asset.category, character: asset.character || '', asset: asset.file, reason: '上传后资产节点未出现' });
+          else refs.push((found.length === 1 ? found[0] : pickNewest(found)).node_uid);
+        }
+        plans.push({ seg: { id: sp.label }, refs: [...new Set(refs)] });
+      }
+      return { ready: problems.length === 0, problems, uploaded, plans, deduped, fallbacks: [...fallbacks.entries()].flatMap(([label, list]) => list.map(f => Object.assign({}, f, { segment: label }))) };
     },
     // [chain 2026-09-23] 链式生成：逐段代点→轮询→同场景链内截帧传参考，场景切换断链（工作台已算好 segs/refTo）
     chainRun: async function (cfg, onProgress) {
@@ -379,9 +651,25 @@
       for (let i = 0; i < segs.length; i++) {
         const sp = segs[i];
         const pct = 5 + Math.round(i / segs.length * 90);
-        const node = (await this.state()).nodes.find(n => normL(n.label) === normL(sp.label) && n.node_kind === 'video');
-        if (!node) { log.push(sp.label + ': 画布上找不到视频节点，跳过'); continue; }
-        const d = node.data || {};
+        const canvasNow = await this.state();
+        const nodeMatches = canvasNow.nodes.filter(n => normL(n.label) === normL(sp.label) && n.node_kind === 'video');
+        if (nodeMatches.length !== 1) { log.push(sp.label + ': 视频节点缺失或重名，停止链式生成'); break; }
+        const node = nodeMatches[0], d = node.data || {};
+        const expectedRefs = (cfg.expectedRefs && cfg.expectedRefs[sp.label]) || [];
+        const incoming = canvasNow.edges.filter(e => (e.target_node_uid || e.to_node_uid) === node.node_uid);
+        const sourceOf = e => e.source_node_uid || e.from_node_uid;
+        const malformedInput = incoming.some(e => !sourceOf(e) || !e.edge_uid);
+        const incomingSources = [...new Set(incoming.map(sourceOf).filter(Boolean))];
+        const missingRefs = expectedRefs.filter(uid => !incomingSources.includes(uid));
+        const unexpectedRefs = incomingSources.filter(uid => !expectedRefs.includes(uid));
+        const inputs = Array.isArray(d.input) ? d.input : [];
+        const incomingIds = incoming.map(e => e.edge_uid).filter(Boolean);
+        const inputMismatch = incomingIds.length !== incoming.length || inputs.length !== incomingIds.length || !incomingIds.every(uid => inputs.includes(uid));
+        if (malformedInput || missingRefs.length || unexpectedRefs.length || inputMismatch) {
+          log.push(sp.label + ': 场景/角色/音频参考校验失败（缺边 ' + missingRefs.length + '，清单外参考 ' + unexpectedRefs.length + '，无效边=' + malformedInput + '，data.input 不一致=' + inputMismatch + '），停止链式生成');
+          rep('[' + sp.label + '] 参考校验失败，未提交生成；链式已停止', pct);
+          break;
+        }
         let okUrl = null;
         if (d.generation_status === 'succeeded') {
           log.push(sp.label + ': 已有生成结果，跳过代点');
@@ -414,7 +702,8 @@
         if (sp.refTo) {
           rep('[' + sp.label + '] 截帧挂参考 → ' + sp.refTo, pct);
           try {
-            const hr = await this.hangRef({ fromUid: node.node_uid, toLabel: sp.refTo, t: sp.t || 60000, url: okUrl ? okUrl.split('?')[0] : null });
+            const hr = await this.hangRef({ fromUid: node.node_uid, fromLabel: sp.label, toLabel: sp.refTo, t: sp.t || 60000, url: okUrl ? okUrl.split('?')[0] : null });
+            if (cfg.expectedRefs && cfg.expectedRefs[sp.refTo] && hr.newNode && hr.newNode.uid) cfg.expectedRefs[sp.refTo].push(hr.newNode.uid);
             log.push(sp.label + ' → ' + sp.refTo + ': 截帧已挂（' + hr.newNode.label + '）');
           } catch (e) { log.push(sp.label + ': 挂参考失败 ' + String(e.message).slice(0, 100)); }
         } else {

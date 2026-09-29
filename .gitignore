@@ -19,6 +19,8 @@ node/
 *.log
 handoff-2026-09-18-1315/
 start-local.bat
+installer/data-key.txt
+installer/dist-ledger.json
 RB-MULTIPLATFORM-README.md
 RUNROLL-IMPORTER-README.md
 dist/

@@ -29,6 +29,20 @@ const machineCode = (() => {
   return crypto.createHash('sha1').update(raw).digest('hex').slice(0,12).toUpperCase().replace(/(.{4})(?=.)/g,'$1-');
 })();
 function licHmac(payload){ return crypto.createHmac('sha256', LIC_SECRET).update(payload).digest('base64url'); }
+// 数据密钥 KM：随授权码下发（签发时用本机 secret 包成 w），激活后才能解开 mapping.enc；无 KM → 映射表静默变空，不报错
+let DATA_KEY = null;
+function unwrapDataKey(w){
+  try {
+    const buf = Buffer.from(String(w), 'base64url');
+    if (buf.slice(0,4).toString('latin1') !== 'MJW1') return null;
+    const iv = buf.slice(4,16), body = buf.slice(16);
+    const k2 = crypto.createHmac('sha256', LIC_SECRET).update('mj-data-key').digest();
+    const d = crypto.createDecipheriv('aes-256-gcm', k2, iv);
+    d.setAuthTag(body.slice(-16));
+    const km = Buffer.concat([d.update(body.slice(0,-16)), d.final()]);
+    return km.length === 32 ? km : null;
+  } catch(e) { return null; }
+}
 function verifyLicense(code){
   try {
     code = String(code||'').trim().replace(/\s+/g,'');
@@ -39,10 +53,11 @@ function verifyLicense(code){
     const data = JSON.parse(Buffer.from(payload,'base64url').toString('utf8'));
     if (String(data.m||'').toUpperCase() !== machineCode.replace(/-/g,'')) return {ok:false, err:'授权码与这台机器不匹配'};
     if (data.e && new Date(data.e+'T23:59:59') < new Date()) return {ok:false, err:'授权已到期（'+data.e+'）'};
-    return {ok:true, name:data.n||'', expiry:data.e||'永久'};
+    return {ok:true, name:data.n||'', expiry:data.e||'永久', km:data.w ? (unwrapDataKey(data.w) || null) : null};
   } catch(e) { return {ok:false, err:'授权码无法解析'}; }
 }
 let LIC = (()=>{ try { return verifyLicense(fs.readFileSync(LIC_FILE,'utf8')); } catch(e){ return {ok:false}; } })();
+DATA_KEY = LIC.km || null;
 // 绿色版模式：环境变量 MJ_SKIP_LIC=1 时跳过授权 gate（便携分发用，正式安装版不受影响）
 if (process.env.MJ_SKIP_LIC === '1') LIC = { ok: true, name: '绿色版', expiry: '' };
 function gate(res){ if(!LIC.ok){ send(res,403,{error:'未授权：机器码 '+machineCode+'，请向管理员索取授权码'}); return true; } return false; }
@@ -77,7 +92,28 @@ function serveWorkbench(res, file){
   const ENC = { 'index.html': 'index.enc', 'mapping-data.js': 'mapping.enc' };
   const enc = path.join(WB_DIR, ENC[file] || (file + '.enc'));
   fs.readFile(enc,(e,d)=>{
-    if(!e){ res.setHeader('Content-Type', file.endsWith('.js')?'application/javascript; charset=utf-8':'text/html; charset=utf-8'); res.end(xorBuf(d)); return; }
+    if(!e){
+      let inner = xorBuf(d);
+      // 映射表第二层：AES-256-GCM(数据密钥)。解不开（无 KM/换机/破解）→ 静默下发空映射，不给任何提示
+      if (file === 'mapping-data.js' && inner.slice(0,5).toString('latin1') === 'MJDK1') {
+        let plain = null;
+        try {
+          if (DATA_KEY) {
+            const iv = inner.slice(5,17), authTag = inner.slice(17,33), ct = inner.slice(33);
+            const dc = crypto.createDecipheriv('aes-256-gcm', DATA_KEY, iv);
+            dc.setAuthTag(authTag);
+            plain = Buffer.concat([dc.update(ct), dc.final()]);
+          }
+        } catch(e2) { plain = null; }
+        if (!plain) {
+          res.setHeader('Content-Type','application/javascript; charset=utf-8');
+          res.end('window.MJ_MAPPING=window.MJ_MAPPING||{};');
+          return;
+        }
+        inner = plain;
+      }
+      res.setHeader('Content-Type', file.endsWith('.js')?'application/javascript; charset=utf-8':'text/html; charset=utf-8'); res.end(inner); return;
+    }
     fs.readFile(path.join(WB_DIR, file),(e2,d2)=>{
       if(e2){ send(res,404,{error:'workbench missing'}); return; }
       res.setHeader('Content-Type', file.endsWith('.js')?'application/javascript; charset=utf-8':'text/html; charset=utf-8');
@@ -135,6 +171,7 @@ http.createServer(async (req,res)=>{
     if(!v.ok){ send(res,200,{ok:false, err:v.err}); return; }
     try { fs.writeFileSync(LIC_FILE, String(b.code).trim()); } catch(e) {}
     LIC = v;
+    DATA_KEY = v.km || null;
     send(res,200,{ok:true, name:v.name, expiry:v.expiry}); return;
   }
 
@@ -265,6 +302,7 @@ http.createServer(async (req,res)=>{
     fs.readFile(path.join(TOOL_DIR, name),(e,d)=>{
       if(e){ send(res,404,{error:'tool not found: '+name}); return; }
       res.setHeader('Content-Type','application/javascript; charset=utf-8');
+      res.setHeader('Cache-Control','no-store');   // [FIX 2026-09-25] 适配器改版后浏览器缓存旧 JS，修复永远到不了画布页
       res.end(d);
     });
     return;

@@ -34,13 +34,41 @@
       try { chrome.runtime.sendMessage({ type: 'RB_JOB_DONE', id: job.id, ok: true, result: r }).catch(() => {}); } catch (e) {}
       return;
     }
-    if (type === 'chain') {
-      // 链式生成：代点+截帧+建参考边，全部会动画布，走与一键直通相同的 confirm=build 保险丝
-      if (!cfg || cfg.confirm !== 'build') throw new Error('chain 任务缺 confirm=build，已拒绝');
+    if (type === 'chain-prepare') {
+      // 第一阶段只同步/上传素材并补齐既有视频节点的入边；绝不触发生成。
+      if (!cfg || cfg.confirm !== 'build') throw new Error('chain-prepare 缺 confirm=build，已拒绝');
       const a = window.RBCore.pickAdapter();
-      if (!a || !a.chainRun) throw new Error('当前平台适配器不支持链式生成');
-      await report(job.id, '链式生成：' + (cfg.segs || []).length + ' 段排队…', 5);
-      const r = await a.chainRun(cfg, (m, p) => report(job.id, m, p));
+      if (!a || !a.ensureChainRefs || !a.resolveChainManifest) throw new Error('当前平台适配器不支持链式资产核验');
+      // 工作台缺项不短路：先让适配器看画布上是否已有可用资产节点，直接引用；真缺才回传提示
+      await report(job.id, '链式预检：核对工作台清单与画布已有资产节点（画布已有资产直接引用）…', 10);
+      if ((cfg.missing || []).length) await report(job.id, '工作台清单有 ' + cfg.missing.length + ' 项未匹配，先尝试用画布已有资产节点兑底…', 15);
+      await report(job.id, '清单核对完成：上传画布缺少的资产节点…', 30);
+      const resolved = await a.resolveChainManifest(cfg.segs || [], cfg.assetRoot || window.RBCore.cfg.assetRoot, true);
+      if (!resolved.ready) {
+        const result = { ready: false, stage: 'canvas-upload', missing: resolved.problems || [], uploaded: resolved.uploaded || 0, problems: resolved.problems || [] };
+        try { chrome.runtime.sendMessage({ type: 'RB_JOB_DONE', id: job.id, ok: true, result }).catch(() => {}); } catch (e) {}
+        return;
+      }
+      await report(job.id, '非破坏性补齐既有视频节点的场景/角色/音频参考边…', 65);
+      const check = await a.ensureChainRefs(resolved.plans, (cfg.segs || []).map(s => s.label), true);
+      const result = { ...check, ready: !!check.ready, stage: 'canvas-match', uploaded: resolved.uploaded || 0, deduped: resolved.deduped || [] };
+      await report(job.id, result.ready ? '资产已上传并逐段核验，等待工作台人工放行' : '资产核验未通过，未提交任何视频生成', 100);
+      try { chrome.runtime.sendMessage({ type: 'RB_JOB_DONE', id: job.id, ok: true, result }).catch(() => {}); } catch (e) {}
+      return;
+    }
+    if (type === 'chain') {
+      // 第二阶段必须由工作台上的独立人工确认按钮放行；提交前再次全量只读核验。
+      if (!cfg || cfg.confirm !== 'build' || cfg.userApproved !== true) throw new Error('链式生成缺少人工放行，已拒绝');
+      const a = window.RBCore.pickAdapter();
+      if (!a || !a.chainRun || !a.ensureChainRefs || !a.resolveChainManifest) throw new Error('当前平台适配器不支持链式生成');
+      const labels = (cfg.segs || []).map(s => s.label);
+      const resolved = await a.resolveChainManifest(cfg.segs || [], cfg.assetRoot || window.RBCore.cfg.assetRoot, false);
+      if (!resolved.ready) throw new Error('资产复核失败，未生成：' + JSON.stringify(resolved.problems).slice(0, 1200));
+      const verify = await a.ensureChainRefs(resolved.plans, labels, false);
+      if (!verify.ready) throw new Error('生成前参考输入复核失败，未生成：' + JSON.stringify(verify.problems).slice(0, 1200));
+      const expectedRefs = Object.fromEntries(resolved.plans.filter(sp => labels.includes(sp.seg.id)).map(sp => [sp.seg.id, sp.refs]));
+      await report(job.id, '人工已放行；场景/角色/音频资产复核通过，开始链式生成…', 5);
+      const r = await a.chainRun({ ...cfg, expectedRefs }, (m, p) => report(job.id, m, p));
       try { chrome.runtime.sendMessage({ type: 'RB_JOB_DONE', id: job.id, ok: true, result: r }).catch(() => {}); } catch (e) {}
       return;
     }

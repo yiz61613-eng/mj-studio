@@ -24,6 +24,19 @@ body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif; backgroun
 .btn:hover{border-color:var(--acc2); color:var(--acc2);}
 .btn.primary{background:var(--acc); border-color:var(--acc); color:#1a0e08; font-weight:600;}
 .btn.primary:hover{filter:brightness(1.1); color:#1a0e08;}
+/* ===== 直通流程步骤条 ===== */
+.steps{display:flex; align-items:flex-start; margin-top:14px;}
+.step{flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; text-align:center; position:relative;}
+.step:not(:last-child)::after{content:''; position:absolute; top:20px; left:calc(50% + 52px); width:calc(100% - 104px); height:2px; background:var(--line); border-radius:2px;}
+.step .btn{display:flex; flex-direction:column; align-items:center; gap:3px; border-radius:12px; padding:8px 10px; min-width:104px; position:relative; z-index:1;}
+.step .btn .s-num{width:20px; height:20px; border-radius:50%; background:var(--line); color:var(--tx2); font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;}
+.step .btn.primary .s-num{background:rgba(0,0,0,.28); color:#fff;}
+.step .s-sub{color:var(--tx2); font-size:11px; margin-top:6px; line-height:1.45; padding:0 6px;}
+.step .btn[hidden]{display:flex; opacity:.38; filter:grayscale(.7);}
+.step .btn.primary:not([hidden]):not(:disabled){box-shadow:0 0 14px rgba(247,129,102,.45); animation:stepPulse 2s ease-in-out infinite;}
+@keyframes stepPulse{50%{box-shadow:0 0 24px rgba(247,129,102,.8);}}
+.step .btn:disabled{cursor:not-allowed;}
+.step:hover .s-sub{color:var(--tx);}
 #search{background:var(--panel); border:1px solid var(--line); color:var(--tx); padding:6px 10px;
   border-radius:8px; width:170px; outline:none;}
 #search:focus{border-color:var(--acc2);}
@@ -112,6 +125,40 @@ body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif; backgroun
 #modal textarea{width:100%; height:300px; background:var(--bg); border:1px solid var(--line); border-radius:8px;
   color:var(--tx); font-size:12px; padding:10px; font-family:Consolas,monospace; outline:none; resize:vertical;}
 #modal .acts{margin-top:12px; text-align:right;}
+/* ---------- 重复素材检测弹层 ---------- */
+#dupModal{position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:55; display:none; align-items:center; justify-content:center;}
+#dupModal.show{display:flex;}
+#dupModal .box{background:var(--bg2); border:1px solid var(--line); border-radius:14px; width:640px; max-width:92vw; padding:20px;}
+#dupModal h3{font-size:15px; margin-bottom:10px;}
+#dupModal .duphint{font-size:11px; color:var(--tx2); margin-bottom:10px;}
+#dupList{max-height:340px; overflow:auto; display:flex; flex-direction:column; gap:8px;}
+.duprow{display:flex; align-items:center; justify-content:space-between; gap:12px; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px 12px;}
+.duprow .dupinfo{min-width:0; flex:1;}
+.duprow .dupinfo b{display:block; font-size:12px; color:var(--tx); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.duprow .dupexist{font-size:11px; color:var(--tx2);}
+.duprow .dupopts{display:flex; gap:12px; flex-shrink:0; font-size:12px; color:var(--tx);}
+.duprow .dupopts label{display:flex; align-items:center; gap:4px; cursor:pointer; user-select:none;}
+#dupModal .acts{margin-top:14px; display:flex; gap:8px; justify-content:flex-end;}
+#dupModal .acts .spacer{flex:1;}
+/* ---------- 链式缺项报告弹层 ---------- */
+#missModal{position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:56; display:none; align-items:center; justify-content:center;}
+#missModal.show{display:flex;}
+#missModal .box{background:var(--bg2); border:1px solid var(--line); border-radius:14px; width:640px; max-width:92vw; padding:20px; max-height:86vh; overflow:auto;}
+#missModal h3{font-size:15px; margin-bottom:10px;}
+#missModal h4{font-size:13px; margin:10px 0 6px;}
+#missModal ul{margin:0 0 8px; padding-left:18px;}
+#missModal li{font-size:12px; color:var(--tx); line-height:1.7;}
+#missModal .missnote{font-size:11px; color:var(--tx2); margin-top:6px; line-height:1.6;}
+#missModal .acts{margin-top:14px; display:flex; gap:8px; justify-content:flex-end;}
+#missModal .acts .spacer{flex:1;}
+/* ---------- 导入进度条 ---------- */
+#impProg{position:fixed; left:50%; transform:translateX(-50%); bottom:26px; z-index:58; background:var(--bg2); border:1px solid var(--line); border-radius:12px; padding:10px 16px; width:420px; max-width:88vw; box-shadow:0 8px 30px rgba(0,0,0,.45); display:none;}
+#impProg.show{display:block;}
+#impProg .txt{font-size:12px; color:var(--tx); margin-bottom:7px; display:flex; justify-content:space-between;}
+#impProg .bar{height:8px; background:var(--bg); border:1px solid var(--line); border-radius:6px; overflow:hidden; position:relative;}
+#impProg .fill{height:100%; width:0%; background:linear-gradient(90deg,#f78166,#ffa287); border-radius:6px; transition:width .25s ease; position:relative; overflow:hidden;}
+#impProg .fill::after{content:''; position:absolute; inset:0; background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent); animation:impShine 1.1s linear infinite;}
+@keyframes impShine{from{transform:translateX(-100%);}to{transform:translateX(100%);}}
 #toast{position:fixed; left:50%; top:66px; transform:translateX(-50%); background:#24292f; border:1px solid var(--acc2);
   color:var(--tx); padding:8px 20px; border-radius:10px; font-size:13px; z-index:99; opacity:0; pointer-events:none; transition:opacity .25s;}
 #toast.show{opacity:1;}
@@ -193,8 +240,10 @@ body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif; backgroun
   <button class="btn" id="btnPaste">粘贴导入</button>
   <input type="file" id="fileMd" accept=".md,.markdown,.txt" hidden>
   <button class="btn" id="btnDir">📁 导入参考图文件夹</button>
+  <button class="btn" id="btnFiles" title="选择单张图片、音频或多选（文件夹内可 Ctrl+A 全选）">＋ 导入素材</button>
   <button class="btn" id="btnLib">🗂 资产库 <span id="libCount"></span></button>
   <input type="file" id="dirInp" webkitdirectory hidden multiple>
+  <input type="file" id="fileInp" hidden multiple accept="image/*,audio/*,.wav,.mp3,.m4a,.aac,.ogg,.flac,.wma">
   <input type="search" id="search" placeholder="搜索镜头号 / 台词 / 角色">
   <span id="stats"></span>
   <button class="btn" id="btnLayout">按分镜号排版</button>
@@ -211,7 +260,7 @@ body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif; backgroun
     <div class="dropbox" id="emptyDrop">
       <div class="big">把分镜 Markdown 拖到这里</div>
       <div class="sub" style="margin-top:8px">自动识别【本段时长】【段号】与 [镜头N]，一段 = 一个视频节点</div>
-      <div class="sub">参考图文件夹可从顶部「📁 导入参考图文件夹」或直接整包拖入，自动分类挂载</div>
+      <div class="sub">参考图可从顶部「＋ 导入素材」选单张/多选（可 Ctrl+A 全选），或「📁 导入参考图文件夹」整包导入，也可直接拖入；已有素材会提示替换或跳过，自动分类挂载</div>
       <div style="margin-top:18px"><button class="btn primary" onclick="document.getElementById('fileMd').click()">选择文件</button>
       <button class="btn" onclick="openPaste()">粘贴文本导入</button></div>
     </div>
@@ -261,10 +310,40 @@ body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif; backgroun
   </div>
 </div>
 
+<div id="dupModal">
+  <div class="box">
+    <h3 id="dupTitle">检测到已有素材</h3>
+    <div class="duphint">同名或同目标的素材已存在。替换 = 覆盖原图（已有挂载关系保持不变）；跳过 = 保留现有素材，不导入新文件。</div>
+    <div id="dupList"></div>
+    <div class="acts">
+      <button class="btn" id="dupCancel">取消导入</button>
+      <span class="spacer"></span>
+      <button class="btn" id="dupAllSkip">全部跳过</button>
+      <button class="btn" id="dupAllRep">全部替换</button>
+      <button class="btn primary" id="dupOk">确认导入</button>
+    </div>
+  </div>
+</div>
+
+<div id="missModal">
+  <div class="box">
+    <h3 id="missTitle">链式准备：缺项报告</h3>
+    <div id="missFixed"></div>
+    <div id="missLeft"></div>
+    <div class="acts">
+      <button class="btn" id="missClose">关闭</button>
+      <span class="spacer"></span>
+      <button class="btn" id="missDir" title="选择整个文件夹批量导入">📁 选文件夹导入</button>
+      <button class="btn primary" id="missFiles" title="选单张参考图或音频，也可多选">＋ 导入素材</button>
+    </div>
+  </div>
+</div>
+
 <style>
 #bridge{position:absolute; top:52px; right:0; bottom:0; width:460px; background:var(--bg2); border-left:1px solid var(--line); z-index:36; transform:translateX(100%); transition:transform .2s; display:flex; flex-direction:column;}
 #bridge.open{transform:translateX(0);}
-#bLog{background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:8px 10px; max-height:220px; overflow:auto; white-space:pre-wrap; font-size:11px; color:var(--tx2); margin-top:10px;}
+#bLog{background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:8px 10px; max-height:300px; overflow:auto; white-space:pre-wrap; font-size:11px; color:var(--tx2); margin-top:10px;}
+#bParams[open] summary{margin-bottom:4px;}
 #bridge .fld{margin:8px 0;}
 #bridge select,#bridge input[type=text]{background:var(--panel); color:var(--tx); border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12px;}
 </style>
@@ -275,20 +354,24 @@ body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif; backgroun
   <div style="padding:14px;overflow:auto;font-size:12px;line-height:1.9;">
     <div id="bridgeConn">检查画布连接…</div>
     <div class="fld">画布类型 <select id="bCanvas"><option value="">（检测中…）</option></select></div>
-    <div class="fld">生成模型<br><select id="bModel"></select>
-      <input type="text" id="bModelCustom" placeholder="填平台模型名（如 sed2-fast）" style="display:none;width:100%;margin-top:4px;">
-    </div>
-    <div class="fld">集数范围 <input type="text" id="bEps" value="6-23" size="10">（如 6-23，或 all）</div>
-    <div class="fld">画幅 <select id="bAspect"><option value="16x9">16:9 横屏</option><option value="9x16">9:16 竖屏</option></select>
-      &nbsp;时长 <select id="bDur"><option value="auto">按分镜（低于4s按4s）</option><option value="5">固定 5 秒</option><option value="10">固定 10 秒</option></select>
-      &nbsp;<label><input type="checkbox" id="bClear"> 先清空画布</label></div>
-    <div style="margin-top:10px;">
-      <button class="btn" id="bBtnPlan">核对规划</button>
-      <button class="btn primary" id="bBtnGo">⚡ 一键直通（上传素材＋建节点＋连参考）</button>
-      <button class="btn" id="bBtnChain">⛓ 链式生成（代点：逐段生成，同场景内截帧传参考）</button>
+    <details id="bParams" style="margin:8px 0;border:1px solid var(--line);border-radius:6px;padding:6px 10px;">
+      <summary style="cursor:pointer;user-select:none;color:var(--tx2);">⚙ 生成参数（模型 / 集数 / 画幅 / 时长 / 清空）</summary>
+      <div class="fld" style="margin-top:10px;">生成模型<br><select id="bModel"></select>
+        <input type="text" id="bModelCustom" placeholder="填平台模型名（如 sed2-fast）" style="display:none;width:100%;margin-top:4px;">
+      </div>
+      <div class="fld">集数范围 <input type="text" id="bEps" value="6-23" size="10">（如 6-23，或 all）</div>
+      <div class="fld">画幅 <select id="bAspect"><option value="16x9">16:9 横屏</option><option value="9x16">9:16 竖屏</option></select>
+        &nbsp;时长 <select id="bDur"><option value="auto">按分镜（低于4s按4s）</option><option value="5">固定 5 秒</option><option value="10">固定 10 秒</option></select>
+        &nbsp;<label><input type="checkbox" id="bClear"> 先清空画布</label></div>
+    </details>
+    <div class="steps">
+      <div class="step"><button class="btn" id="bBtnPlan"><span class="s-num">1</span><span class="s-t">核对规划</span></button><span class="s-sub">分镜 / 资产清单核对</span></div>
+      <div class="step"><button class="btn primary" id="bBtnGo"><span class="s-num">2</span><span class="s-t">⚡ 一键直通</span></button><span class="s-sub">上传素材＋建节点＋连参考</span></div>
+      <div class="step"><button class="btn" id="bBtnChain"><span class="s-num">3</span><span class="s-t">⛓ 链式准备</span></button><span class="s-sub">核验/补齐场景·角色·音频（不生成）</span></div>
+      <div class="step"><button class="btn primary" id="bBtnApproveChain" hidden disabled><span class="s-num">4</span><span class="s-t">🔒 人工放行</span></button><span class="s-sub">确认后才开始链式生成</span></div>
     </div>
     <pre id="bLog">等待任务…</pre>
-    <div style="color:var(--tx2);margin-top:10px;">安全约定：直通只上传素材、建节点、连参考线，永不触碰生成按钮。「⛓ 链式生成」是唯一例外：你点下它即授权本次任务的代点生成——逐段排队、同场景内截帧传参考、场景切换自动断链（剧本为事实来源，链外不挂截帧）。</div>
+    <div style="color:var(--tx2);margin-top:10px;">安全约定：直通只上传素材、建节点、连参考线。「⛓ 链式准备」只核验并上传匹配资产、补参考边，不会生成视频；只有资产全部核验通过后，必须再由你点击「人工放行」才会逐段生成。任何场景/角色/音频缺失都会停止并回报工作台，不会消耗生成积分。</div>
   </div>
 </div>
 <script>
@@ -297,6 +380,7 @@ body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif; backgroun
 const SRV = 'http://localhost:8899';
 const bridgeEl = document.getElementById('bridge');
 let bridgePlatform = null, bridgePollTimer = null, bridgeJobId = null;
+let bridgeJobType = '', bridgeJobCfg = null, pendingChainCfg = null;
 let bridgeList = [];   // [{worker, platform, pageUrl, models:{models,defaultModel}}]
 
 function parseEps(v){ v=String(v||'').trim(); if(!v||v==='all') return 'all';
@@ -400,8 +484,8 @@ async function postJob(cfg){
   try{
     await syncStore();
     const r=await (await fetch(SRV+'/__jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)})).json();
-    bridgeJobId=r.id; document.getElementById('bLog').textContent='';
-    blog('已下发任务 #'+r.id+' → '+b.platform+'（'+(cfg.type==='plan'?'核对规划':'一键直通')+'）');
+    bridgeJobId=r.id; bridgeJobType=cfg.type||''; bridgeJobCfg=cfg; pollJob._n=0; document.getElementById('bLog').textContent='';
+    blog('已下发任务 #'+r.id+' → '+b.platform+'（'+(cfg.type==='plan'?'核对规划':cfg.type==='chain-prepare'?'链式资产核验/补齐':cfg.type==='chain'?'人工放行后的链式生成':'一键直通')+'）');
   }catch(e){ toast('同步或下发失败：'+(e&&e.message||e)); blog('❌ '+(e&&e.message||e)); }
 }
 
@@ -410,15 +494,50 @@ async function pollJob(){
   try{
     const j=await (await fetch(SRV+'/__jobs/'+bridgeJobId)).json();
     (j.events||[]).forEach((e,i)=>{ if(i>=pollJob._n||0){ blog('· '+e.msg); pollJob._n=i+1; } });
-    if(j.status==='done'){ blog('✅ 完成');
-      if(j.result&&j.result.videoNodes!=null){
-  blog('规划：'+j.result.videoNodes+' 个视频节点 / '+j.result.edges+' 条参考 / 缺素材 '+j.result.missingUids);
-  if(j.result.canvas&&!j.result.canvas.stable) blog('⚠ 画布读取不稳定（服务端同步滞后），本次统计可能不准，建议稍后重新核对');
-  if(j.result.missingUids>0&&j.result.missingAll&&j.result.missingAll.length) blog('缺的素材：'+j.result.missingAll.join('、'));
-}
-      if(j.result&&j.result.built) blog('落盘：'+j.result.built.videos+' 视频节点 / '+j.result.built.edges+' 连线');
-      bridgeJobId=null; pollJob._n=0;
-    }else if(j.status==='failed'){ blog('❌ 失败：'+(j.result||'未知错误')); bridgeJobId=null; pollJob._n=0; }
+    if(j.status==='done'){
+      const result=j.result||{};
+      if(bridgeJobType==='chain-prepare'){
+        if(result.ready){
+          pendingChainCfg=Object.assign({},bridgeJobCfg,{type:'chain',userApproved:true});
+          const gate=document.getElementById('bBtnApproveChain'); gate.hidden=false; gate.disabled=false;
+          blog('✅ 资产核验通过：'+((result.segments||[]).length)+' 段；已上传 '+(result.uploaded||0)+' 个资产、补边 '+(result.addedEdges||0)+' 条。现在等待你单独点击「人工放行」，尚未生成、未消耗生成积分。');
+          (result.deduped||[]).forEach(d=>blog('🧹 '+(d.segment||'')+' 「'+d.asset+'」同名节点取最新：删除 '+d.removed+' 个'+(d.keptBecauseReferenced?'，'+d.keptBecauseReferenced+' 个因仍被引用而保留':'')+'；引用指向 '+(d.keptLabel||d.kept)));
+          (result.removedRefs||[]).forEach(x=>blog('✂ '+(x.segment||'')+' 删除清单外参考边 → '+(x.asset||x.uid)));
+          (result.fallbacks||[]).forEach(f=>blog('🔗 '+f.segment+' 直接引用画布已有资产：'+f.category+(f.character?'（'+f.character+'）':'')+'「'+f.asset+'」'));
+          (bridgeJobCfg&&bridgeJobCfg.segs||[]).forEach(s=>blog('核验 '+s.label+'：'+s.assets.map(a=>a.category+'/'+a.file+(a.character?'（'+a.character+'）':'')).join('；')));
+        }else{
+          pendingChainCfg=null; const gate=document.getElementById('bBtnApproveChain'); gate.hidden=true; gate.disabled=true;
+          blog('⛔ 资产/节点核验未通过，链式生成已停止；未提交任何视频生成。');
+          if(result.uploaded) blog('本轮已向画布上传 '+result.uploaded+' 个资产；未确认出现的见下方缺项明细。');
+          (result.missing&&result.missing.length?result.missing:(result.problems||[])).forEach(x=>blog('缺项：'+(x.segment||'')+' · '+(x.category||'节点')+' · '+(x.character||'')+' '+(x.asset||'')+' · '+(x.reason||'')+(x.detail?' ［'+x.detail+'］':'')+(x.unexpectedAssets?' · 额外输入：'+x.unexpectedAssets.join('、'):'')));
+          if(result.missingAll&&result.missingAll.length) blog('仍未出现在画布：'+result.missingAll.join('、'));
+          blog('请在工作台补齐或重新匹配对应资产后，再点「链式准备」复核。');
+          try{
+            autoMountAll();
+            const prevSegs=(bridgeJobCfg&&bridgeJobCfg.segs)||[];
+            const fixed=confirmMissingFromLibrary(prevSegs);
+            const now=prevSegs.map(s=>{ const seg=state.segments.find(x=>x.id===s.label); return seg?chainManifestFor(seg):null; }).filter(Boolean);
+            const seen={}, left=[];
+            now.forEach(m=>(m.missing||[]).forEach(x=>{ const k=x.segment+'|'+x.category+'|'+(x.character||'')+'|'+(x.asset||''); if(!seen[k]){ seen[k]=1; left.push(x); } }));
+            if(fixed.length||left.length) showMissingReport(fixed, left, result.missingAll||[]);
+          }catch(e){}
+        }
+      }else{
+        blog('✅ 完成');
+        if(result.videoNodes!=null){
+          blog('规划：'+result.videoNodes+' 个视频节点 / '+result.edges+' 条参考 / 缺素材 '+result.missingUids);
+          if(result.canvas&&!result.canvas.stable) blog('⚠ 画布读取不稳定（服务端同步滞后），本次统计可能不准，建议稍后重新核对');
+          if(result.missingUids>0&&result.missingAll&&result.missingAll.length) blog('缺的素材：'+result.missingAll.join('、'));
+        }
+        if(result.built) blog('落盘：'+result.built.videos+' 视频节点 / '+result.built.edges+' 连线');
+        (result.log||[]).forEach(line=>blog(line));
+      }
+      bridgeJobId=null; bridgeJobType=''; bridgeJobCfg=null; pollJob._n=0;
+    }else if(j.status==='failed'){
+      blog('❌ 失败：'+(typeof j.result==='string'?j.result:JSON.stringify(j.result||'未知错误')));
+      if(bridgeJobType==='chain'){ pendingChainCfg=null; const gate=document.getElementById('bBtnApproveChain'); gate.hidden=true; gate.disabled=true; }
+      bridgeJobId=null; bridgeJobType=''; bridgeJobCfg=null; pollJob._n=0;
+    }
   }catch(e){}
 }
 setInterval(pollJob, 2000);
@@ -445,6 +564,9 @@ document.getElementById('btnBridge').onclick=()=>{ bridgeEl.classList.add('open'
 document.getElementById('bridgeClose').onclick=()=>bridgeEl.classList.remove('open');
 document.getElementById('bModel').onchange=e=>{ document.getElementById('bModelCustom').style.display=e.target.value==='__custom'?'':'none'; };
 document.getElementById('bCanvas').onchange=onCanvasChange;
+/* 生成参数折叠状态记忆 */
+(function(){ const bp=document.getElementById('bParams'); try{ bp.open=localStorage.getItem('mj_bparams')==='1'; }catch(e){}
+  bp.addEventListener('toggle',()=>{ try{ localStorage.setItem('mj_bparams',bp.open?'1':'0'); }catch(e){} }); })();
 document.getElementById('bBtnPlan').onclick=()=>postJob(collectCfg('plan'));
 /* ---------- 链式生成 ---------- */
 function frameTimeOf(seg){
@@ -459,21 +581,185 @@ function frameTimeOf(seg){
   }
   return last.to * 1000;
 }
+function chainManifestFor(seg){
+  const cleanCh = x => String(x||'').trim().split(/[（(【]/)[0].trim();
+  const mapChars = ((state.outfitMap||{})[seg.id]||[]).map(x=>cleanCh(x.char)).filter(Boolean);
+  const requiredChars = [...new Set([...(seg.chars||[]).map(cleanCh), ...mapChars].filter(Boolean))];
+  const assets = [], missing = [];
+  const addMount = m => {
+    const a = state.assets.find(x=>x.id===m.aid); if(!a) return;
+    if(!['scene','role','audio','prop'].includes(m.cat)) return;
+    const character = cleanCh(m.char || a.char || (m.cat==='audio' ? audioCharOf(a) : ''));
+    assets.push({ category:m.cat, file:a.name, assetId:a.id, character:character||'' });
+  };
+  (state.mounts[seg.id]||[]).forEach(addMount);
+  const uniq = [...new Map(assets.map(a=>[a.category+'|'+a.file+'|'+a.character,a])).values()];
+  const sceneMap=(state.sceneMap||{})[seg.id]||{};
+  const sceneText=seg.scene||sceneMap.name||sceneMap.txt||'';
+  const sceneExpected=!!(seg.scene||sceneMap.no||sceneMap.name||sceneMap.txt);
+  if(!sceneExpected) missing.push({segment:seg.id,category:'scene',asset:'',reason:'分镜段未识别/未映射场景'});
+  else if(!uniq.some(a=>a.category==='scene')) missing.push({segment:seg.id,category:'scene',asset:sceneText,reason:'工作台未挂载场景资产'});
+  for(const ch of requiredChars){
+    if(!uniq.some(a=>a.category==='role'&&a.character===ch)) missing.push({segment:seg.id,category:'role',character:ch,asset:'',reason:'工作台未匹配角色参考图'});
+    if(!uniq.some(a=>a.category==='audio'&&a.character===ch)) missing.push({segment:seg.id,category:'audio',character:ch,asset:'',reason:'工作台未匹配角色音轨'});
+  }
+  return { label:seg.id, scene:sceneText, required:{scene:sceneExpected,sceneText,characters:requiredChars}, requiredChars, assets:uniq, missing };
+}
+function chainManifestSignature(list){
+  return JSON.stringify((list||[]).map(s=>({label:s.label,scene:s.scene,required:s.required,assets:(s.assets||[]).slice().sort((a,b)=>(a.category+'|'+a.file+'|'+a.character+'|'+a.assetId).localeCompare(b.category+'|'+b.file+'|'+b.character+'|'+b.assetId)),missing:s.missing||[],t:s.t,refTo:s.refTo})));
+}
+function normAssetName(s){ return String(s||'').replace(/\.(png|jpg|jpeg|webp|bmp|gif|wav|mp3|m4a|aac|ogg|flac)$/i,'').split(/[（(【]/)[0].replace(/\s+/g,'').toLowerCase(); }
+/* 角色归属判定（以剧本人物表为事实来源）：资产名命中的角色名必须是「最长匹配」，
+   且命中位置之后必须是分隔符或结尾 —— 否则视为归属其他角色（如 孟玨珩助理 ≠ 孟玨珩） */
+function charOwnsAssetName(ck, name){
+  const n = normAssetName(name), k = normAssetName(ck);
+  if(!n || !k) return false;
+  if(n === k) return true;
+  if(!n.includes(k)) return false;
+  const longerHit = (vocab.chars||[]).some(c=>{ const nc = normAssetName(c); return nc.length > k.length && n.includes(nc); });
+  if(longerHit) return false;
+  let idx = n.indexOf(k);
+  while(idx >= 0){
+    const after = n.charAt(idx + k.length);
+    if(after === '' || '-_·•/ |,，、'.includes(after)) return true;
+    idx = n.indexOf(k, idx + 1);
+  }
+  return false;
+}
+/* 链式准备缺项先在工作台资产库确认一遍：库里确实有相关素材就直接匹配挂上（保留手工覆盖），只有真没导入的才提示导入 */
+function libAssetCandidates(ck, category, outfit){
+  // ck: 角色/场景名；category: 'role'|'audio'|'scene'；outfit: 服装映射表指定的期望服装（可空）
+  // [FIX 2026-09-25] 角色归属以剧本人物表最长匹配；多套服装必须精确，不再“抓到第一个就用”
+  buildVocab();
+  const nk = normAssetName(ck); if(!nk) return [];
+  const isImg = a => /\.(png|jpg|jpeg|webp|bmp|gif)$/i.test(a.name||'');
+  const scored = [];
+  state.assets.forEach(a=>{
+    const n = normAssetName(a.name);
+    let sc = 0;
+    if(category==='audio'){
+      if(a.cat!=='audio') return;
+      const ac = audioCharOf(a);
+      if(ac===ck) sc = 100;
+      else if(ac && charOwnsAssetName(ck, ac)) sc = 80;
+      else if(charOwnsAssetName(ck, a.name)) sc = 60;
+    } else if(category==='scene'){
+      if(a.cat!=='scene' && a.cat!=='unknown') return;
+      if(a.cat==='unknown' && !isImg(a)) return;
+      if(n===nk) sc = 100;
+      else if(n.startsWith(nk) || nk.startsWith(n)) sc = 85;
+      else if(n.includes(nk) || nk.includes(n)) sc = 70;
+      else if(a.sceneCode && missCodeEq(a, ck)) sc = 75;
+    } else {
+      if(a.cat!=='role' && a.cat!=='unknown') return;
+      if(a.cat==='unknown' && !isImg(a)) return;
+      if(a.char===ck) sc = 100;
+      else if(a.char && normAssetName(a.char)===nk) sc = 92;
+      else if(n===nk) sc = 95;
+      else if(charOwnsAssetName(ck, a.name)) sc = 85;
+    }
+    if(sc>0) scored.push({a, sc, reclassified: a.cat==='unknown'});
+  });
+  if(category==='role'){
+    // 服装规则：单套 → 模糊可用；多套 → 必须映射表指定服装并精确匹配，宁缺勿错
+    const variants = new Set(scored.map(x=> (x.a.outfit||'').trim() || normAssetName(x.a.name).replace(nk,'').replace(/^[0-9-]+/,'')));
+    if(variants.size > 1){
+      const o = normAssetName(outfit||'');
+      if(!o) return [];
+      const fitted = scored.filter(x=>{
+        const n2 = normAssetName(x.a.name);
+        const of = normAssetName(x.a.outfit||'') || n2.replace(nk,'').replace(/^[0-9-]+/,'');
+        return of ? (n2.includes(o) || o.includes(of) || of.includes(o)) : false;
+      });
+      return fitted;
+    }
+  }
+  scored.sort((x,y)=> y.sc-x.sc || normAssetName(x.a.name).length-normAssetName(y.a.name).length);
+  return scored;
+}
+function missCodeEq(a, text){
+  const m = String(text||'').match(/^([0-9]+-[0-9]+)/);
+  return !!(m && a.sceneCode===m[1]);
+}
+function confirmMissingFromLibrary(manifests){
+  const added = [];
+  const hasMount = (segId, cat, aid) => (state.mounts[segId]||[]).some(x => x.aid === aid && x.cat === cat);
+  for (const m of (manifests||[])) for (const miss of (m.missing||[])) {
+    if (miss.category === 'scene') {
+      const cands = libAssetCandidates(miss.asset||'', 'scene');
+      if (cands.length && !hasMount(m.label,'scene',cands[0].a.id)) {
+        const pick = cands[0];
+        if(pick.reclassified){ pick.a.cat='scene'; pick.a.sceneKey = miss.asset||pick.a.name.replace(/\.[^.]+$/,''); }
+        (state.mounts[m.label] = state.mounts[m.label] || []).push({ aid: pick.a.id, cat:'scene', auto:false, via:'chain-confirm-v2' });
+        added.push('段 '+m.label+' 场景「'+(miss.asset||'')+'」← 资产库「'+pick.a.name+'」'
+          +(cands.length>1?('（'+cands.length+' 个候选，已选最匹配，可手动换）'):'')
+          +(pick.reclassified?'（原未分类，已归入场景）':''));
+      }
+    } else if (miss.category === 'role' || miss.category === 'audio') {
+      const ck = String(miss.character||'').trim(); if (!ck) continue;
+      // 服装映射表是事实来源：该段该角色指定了服装就必须按指定精确匹配，匹配不到宁缺勿错
+      const oen = ((state.outfitMap||{})[m.label]||[]).find(e=>String(e.char||'').trim().split(/[（(【]/)[0].trim()===ck);
+      const wantOutfit = oen ? (oen.outfit||'') : '';
+      const cands = libAssetCandidates(ck, miss.category, wantOutfit);
+      if (cands.length && !hasMount(m.label, miss.category, cands[0].a.id)) {
+        const pick = cands[0];
+        if(pick.reclassified){ pick.a.cat = miss.category; if(miss.category==='role') pick.a.char = ck; }
+        (state.mounts[m.label] = state.mounts[m.label] || []).push({ aid: pick.a.id, cat: miss.category, auto:false, char: ck, via:'chain-confirm-v2' });
+        added.push('段 '+m.label+(miss.category==='audio'?' 音轨':' 角色图')+'「'+ck+'」← 资产库「'+pick.a.name+'」'
+          +(cands.length>1?('（'+cands.length+' 个候选，已选最匹配，可手动换）'):'')
+          +(miss.category==='role'&&wantOutfit?('（按映射服装「'+wantOutfit+'」精确匹配）'):'')
+          +(pick.reclassified?'（原未分类，已归入'+(miss.category==='role'?'人物':'音频')+'）':''));
+      }
+    }
+  }
+  if (added.length){
+    saveState(); renderLib();
+    [...new Set((manifests||[]).map(m=>m.label))].forEach(id=>{ try{ renderThumbs(id); }catch(e){} });
+  }
+  return added;
+}
 document.getElementById('bBtnChain').onclick = async () => {
   if (!state.segments.length) { toast('先导入分镜'); return; }
+  if (bridgeJobId) { toast('当前还有任务执行中'); return; }
   const eps = parseEps(document.getElementById('bEps').value);
-  const segs = state.segments.filter(s => !eps || (+s.id.split('-')[0] >= eps[0] && +s.id.split('-')[0] <= eps[1]));
+  const segs = state.segments.filter(s => !Array.isArray(eps) || (+s.id.split('-')[0] >= eps[0] && +s.id.split('-')[0] <= eps[1]));
   if (!segs.length) { toast('集数范围内没有分镜段'); return; }
-  const base = collectCfg('chain');
-  const cfg = { type: 'chain', confirm: 'build', defaultModel: (typeof base.model === 'number' ? base.model : 63),
-    pollMax: 90, target: base.target, segs: segs.map((s, i) => {
+  autoMountAll(); // 用工作台当前资产库/映射重新核对自动挂载；保留你手动指定的挂载
+  const confirmedLib = confirmMissingFromLibrary(segs.map(chainManifestFor));
+  if (confirmedLib.length) confirmedLib.forEach(t => blog('🔗 资产库确认挂载：' + t));
+  const base = collectCfg('chain-prepare');
+  const manifests = segs.map(chainManifestFor);
+  const cfg = { ...base, type: 'chain-prepare', confirm: 'build', clearFirst:false, assetRoot: SRV, defaultModel: (typeof base.model === 'number' ? base.model : 63),
+    segs: segs.map((s, i) => {
       const next = segs[i + 1];
       const sc = s.id.replace(/-[0-9]+$/, ''), scN = next ? next.id.replace(/-[0-9]+$/, '') : null;
-      return { label: s.id, t: frameTimeOf(s), refTo: (next && sc === scN) ? next.id : null };
-    }) };
+      return { ...manifests[i], t: frameTimeOf(s), refTo: (next && sc === scN) ? next.id : null };
+    }), missing: manifests.flatMap(m=>m.missing) };
+  cfg.manifestSig = chainManifestSignature(cfg.segs);
   const nRef = cfg.segs.filter(x => x.refTo).length;
-  const nBreak = cfg.segs.length - nRef;
-  if (!confirm('链式生成确认：\n· 代点 ' + cfg.segs.length + ' 段视频（模型按节点配置，缺省 ' + cfg.defaultModel + '）\n· ' + nRef + ' 段完成后截帧挂给同场景下一段\n· ' + nBreak + ' 段为场景链头/链尾，不挂截帧\n\n确认开始？')) return;
+  pendingChainCfg = null;
+  const gate = document.getElementById('bBtnApproveChain'); gate.hidden = true; gate.disabled = true;
+  if (!confirm('第一阶段只做资产核验、上传画布缺少的场景/角色/音频资产并补参考边，不会生成视频，也不会消耗生成积分。\n\n核验范围：' + cfg.segs.length + ' 段；同场景计划截帧传递 ' + nRef + ' 次。继续？')) return;
+  await postJob(cfg);
+};
+document.getElementById('bBtnApproveChain').onclick = async () => {
+  if (!pendingChainCfg || bridgeJobId) { toast('没有可放行的已核验任务'); return; }
+  autoMountAll();
+  const ids = pendingChainCfg.segs.map(s=>s.label), eps = parseEps(document.getElementById('bEps').value);
+  const selected = state.segments.filter(s=>!Array.isArray(eps) || (+s.id.split('-')[0]>=eps[0]&&+s.id.split('-')[0]<=eps[1]));
+  const current = selected.map((s,i)=>{
+    const m=chainManifestFor(s), next=selected[i+1];
+    const sc=s.id.replace(/-[0-9]+$/,''), scN=next?next.id.replace(/-[0-9]+$/,''):null;
+    return Object.assign(m,{t:frameTimeOf(s),refTo:(next&&sc===scN)?next.id:null});
+  });
+  if (selected.length!==ids.length || selected.some((s,i)=>s.id!==ids[i]) || chainManifestSignature(current)!==pendingChainCfg.manifestSig) {
+    pendingChainCfg=null; const gate=document.getElementById('bBtnApproveChain'); gate.hidden=true; gate.disabled=true;
+    toast('分镜/资产挂载已变化，请重新执行「链式准备」'); blog('⛔ 准备后工作台资产清单发生变化，旧核验已作废；未生成。'); return;
+  }
+  const cfg = Object.assign({}, pendingChainCfg, { type: 'chain', confirm: 'build', userApproved: true });
+  if (!confirm('人工门禁：资产核验已通过。点确定后将按列表逐段代点生成，可能消耗平台积分；任何参考复核失败都会立即停止。\n\n确认放行？')) return;
+  pendingChainCfg = null;
+  const gate = document.getElementById('bBtnApproveChain'); gate.hidden = true; gate.disabled = true;
   await postJob(cfg);
 };
 
@@ -481,6 +767,7 @@ document.getElementById('bBtnGo').onclick=()=>postJob(Object.assign(collectCfg('
 /* 清空工作台的按钮绑定在文件末尾（弹窗 HTML 之后），避免元素未加载 */
 </script>
 
+<div id="impProg"><div class="txt"><span id="impTxt">准备导入…</span><span id="impPct">0%</span></div><div class="bar"><div class="fill" id="impFill"></div></div></div>
 <div id="toast"></div>
 <div id="dropOverlay">松手导入</div>
 
@@ -1231,7 +1518,7 @@ function classifyAsset(filename, dir){
   if(/角色|人物|char/i.test(dir)) cat='role';
   else if(/道具|prop/i.test(dir)) cat='prop';
   else if(/场景|背景|scene|bg/i.test(dir)) cat='scene';
-  const hitChar = vocab.chars.find(c=>base.includes(c));
+  const hitChar = vocab.chars.filter(c=>base.includes(c)).sort((a,b)=>b.length-a.length)[0] || null;
   const hitProp = vocab.props.find(p=>base.includes(p));
   let hitScene = null, hitCode = null;
   if(base.length>=2) hitScene = vocab.scenes.find(sc=> base.includes(sc) || sc.includes(base));
@@ -1275,21 +1562,121 @@ async function loadLibAssets(){
     }
   }
 }
+function assetIdentity(a){
+  if(!a) return '';
+  if(a.cat==='role') return 'role:'+(a.char||'')+'|'+(a.outfit||'');
+  if(a.cat==='scene') return 'scene:'+(a.sceneKey||'')+'|'+(a.sceneCode||'');
+  if(a.cat==='prop') return 'prop:'+(a.propKey||'');
+  if(a.cat==='audio') return 'audio:'+(audioCharOf(a)||'');
+  return '';
+}
+const CAT_LABEL = {role:'人物', scene:'场景', prop:'道具', audio:'音频', unknown:'未分类'};
+let dupCtx = null;
 async function importAssetFiles(list){
-  toast('正在导入 '+list.length+' 个素材…');
-  const counts = {role:0, scene:0, prop:0, audio:0, unknown:0};
-  for(const o of list){
+  buildVocab();
+  const items = list.map(o=>{
     const cls = classifyAsset(o.file.name, o.dir);
-    const id = 'a'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-    await dbPut({key:'lib:'+id, nodeId:'__lib__', kind:'img', name:o.file.name, blob:o.file});
-    state.assets.push(Object.assign({id, name:o.file.name, dir:o.dir||''}, cls));
-    counts[cls.cat]++;
+    const probe = Object.assign({name:o.file.name}, cls);
+    const idNew = assetIdentity(probe);
+    const nm = (o.file.name||'').toLowerCase();
+    const dup = state.assets.find(a=>
+      (a.name||'').toLowerCase()===nm ||
+      (cls.cat!=='unknown' && a.cat===cls.cat && idNew && assetIdentity(a)===idNew)
+    );
+    return {file:o.file, dir:o.dir||'', cls, dup:dup||null, choice: dup ? ((dup.name||'').toLowerCase()===nm ? 'replace' : 'skip') : null};
+  });
+  const conflicts = items.filter(it=>it.dup);
+  if(conflicts.length){
+    const go = await new Promise(res=>{ dupCtx = {items, resolve:res}; renderDupList(); document.getElementById('dupModal').classList.add('show'); });
+    if(!go){ toast('已取消导入'); return; }
   }
-  saveState();
-  await loadLibAssets();
-  renderLib();
-  autoMountAll();
-  toast('导入完成：人物 '+counts.role+' · 场景 '+counts.scene+' · 道具 '+counts.prop+' · 未分类 '+counts.unknown);
+  await commitImport(items);
+}
+function renderDupList(){
+  const items = dupCtx.items.filter(i=>i.dup);
+  document.getElementById('dupTitle').textContent = '检测到 '+items.length+' 个已存在的素材（其余 '+(dupCtx.items.length-items.length)+' 个为新素材，将直接导入）';
+  const box = document.getElementById('dupList'); box.innerHTML='';
+  items.forEach((it, idx)=>{
+    const row = document.createElement('div'); row.className='duprow';
+    const info = document.createElement('div'); info.className='dupinfo';
+    const b = document.createElement('b'); b.textContent = it.file.name;
+    const sp = document.createElement('span'); sp.className='dupexist';
+    const d = it.dup;
+    sp.textContent = '已有：'+d.name+'（'+CAT_LABEL[d.cat||'unknown']+(d.char?('·'+d.char):(d.sceneKey?('·'+d.sceneKey):(d.propKey?('·'+d.propKey):'')))+'）'+(it.choice==='replace'?'　默认替换':'　默认跳过');
+    info.appendChild(b); info.appendChild(sp);
+    const opts = document.createElement('div'); opts.className='dupopts';
+    const name = 'dup_'+dupCtx.items.indexOf(it);
+    [['replace','替换'],['skip','跳过']].forEach(([v,lab])=>{
+      const l = document.createElement('label');
+      const r = document.createElement('input'); r.type='radio'; r.name=name; r.checked = it.choice===v;
+      r.onchange = ()=>{ it.choice = v; };
+      const t = document.createElement('span'); t.textContent = lab;
+      l.appendChild(r); l.appendChild(t); opts.appendChild(l);
+    });
+    row.appendChild(info); row.appendChild(opts);
+    box.appendChild(row);
+  });
+}
+let impProgOn=false, missModalActive=false;
+function impShow(total){ impProgOn=true; const p=document.getElementById('impProg'); p.classList.add('show'); impSet(0,total,'准备导入'); }
+function impSet(done,total,label){
+  const pct = total? Math.min(100,Math.round(done/total*100)) : 100;
+  document.getElementById('impTxt').textContent = (label||'正在导入')+' '+done+' / '+total;
+  document.getElementById('impPct').textContent = pct+'%';
+  document.getElementById('impFill').style.width = pct+'%';
+}
+function impHide(){ impProgOn=false; document.getElementById('impProg').classList.remove('show'); document.getElementById('impFill').style.width='0%'; }
+async function commitImport(items){
+  const counts = {role:0, scene:0, prop:0, audio:0, unknown:0};
+  let replaced=0, skipped=0;
+  const total = items.length;
+  impShow(total);
+  let done=0;
+  try{
+    for(const it of items){
+      if(it.dup){
+        if(it.choice!=='replace'){ skipped++; done++; impSet(done,total,'正在导入'); continue; }
+        const a = it.dup;
+        await dbPut({key:'lib:'+a.id, nodeId:'__lib__', kind:'img', name:it.file.name, blob:it.file});
+        a.name = it.file.name; a.dir = it.dir||a.dir||'';
+        Object.assign(a, it.cls);
+        if(libCache[a.id]) delete libCache[a.id];
+        if(urlCache['lib:'+a.id]){ try{ URL.revokeObjectURL(urlCache['lib:'+a.id]); }catch(e){} delete urlCache['lib:'+a.id]; }
+        replaced++;
+      } else {
+        const cls = it.cls;
+        const id = 'a'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+        await dbPut({key:'lib:'+id, nodeId:'__lib__', kind:'img', name:it.file.name, blob:it.file});
+        state.assets.push(Object.assign({id, name:it.file.name, dir:it.dir||''}, cls));
+      }
+      done++; impSet(done,total,'正在导入');
+    }
+    impSet(total,total,'自动挂载中');
+    saveState();
+    await loadLibAssets();
+    renderLib();
+    autoMountAll();
+    impSet(total,total,'完成');
+  }catch(e){ impHide(); toast('导入失败：'+(e&&e.message||e)); return; }
+  setTimeout(impHide, 900);
+  const rerun = missModalActive;
+  if(rerun){ document.getElementById('missModal').classList.remove('show'); missModalActive=false; }
+  toast('导入完成：人物 '+counts.role+' · 场景 '+counts.scene+' · 道具 '+counts.prop+' · 音频 '+counts.audio+' · 未分类 '+counts.unknown
+    +(replaced?('，替换 '+replaced):'')+(skipped?('，跳过 '+skipped):'')+(rerun?'。已自动挂载，请重新点「链式准备」复核':''));
+}
+function showMissingReport(fixed, left, canvasGone){
+  const fx=document.getElementById('missFixed'), lt=document.getElementById('missLeft');
+  const nFixed=(fixed||[]).length, nLeft=(left||[]).length;
+  document.getElementById('missTitle').textContent = nLeft? ('链式准备：还差 '+nLeft+' 项素材') : '链式准备：缺项已全部解决';
+  fx.innerHTML = nFixed? '<h4>✅ 已在工作台资产库找到并自动挂载 '+nFixed+' 项：</h4><ul>'+fixed.map(t=>'<li>'+escapeHtml(t)+'</li>').join('')+'</ul>' : '';
+  if(nLeft){
+    lt.innerHTML = '<h4>⛔ 工作台也没有以下素材：</h4><ul>'+(left||[]).map(x=>'<li>段 '+escapeHtml(String(x.segment||''))+' · '+(CAT_LABEL[x.category]||x.category||'?')+(x.character?('「'+escapeHtml(x.character)+'」'):'')+(x.asset&&x.asset!==x.character?('（'+escapeHtml(x.asset)+'）'):'')+' — '+escapeHtml(x.reason||'')+'</li>').join('')+'</ul>'
+      + ((canvasGone&&canvasGone.length)? '<div class="missnote">另有画布侧缺项（导入后需重新核验）：'+escapeHtml(canvasGone.join('、'))+'</div>' : '')
+      + '<div class="missnote">点右下按钮导入素材：导入完成会自动分类挂载，然后再点「链式准备」复核。</div>';
+  } else {
+    lt.innerHTML = '<div class="missnote">所有缺项都已在工作台资产库中找到并挂载。点「链式准备」重新核验即可继续。</div>';
+  }
+  document.getElementById('missModal').classList.add('show'); missModalActive=true;
 }
 function entryFiles(entry, dir, out){
   return new Promise(res=>{
@@ -1319,14 +1706,16 @@ function audioCharOf(a){
   const base = (a.name||'').replace(/\.[^.]+$/,'').replace(/_?音轨$/,'');
   const m = base.match(/^-?[0-9]+[-_](.+)$/);
   const core = m ? m[1] : base;
-  const ch = vocab.chars.find(c=>core===c) || vocab.chars.find(c=>core.startsWith(c)) || vocab.chars.find(c=>core.includes(c));
-  return ch || core.split(/[-_]/)[0];
+  // [FIX 2026-09-25] 剧本人物表最长匹配：完全相等优先，否则取包含于音轨名的最长角色名，避免 孟玨珩 误吃 孟玨珩助理 的音轨
+  const hits = vocab.chars.filter(c=>core===c || core.includes(c)).sort((x,y)=>y.length-x.length);
+  if(hits.length) return hits[0];
+  return core.split(/[-_]/)[0];
 }
 function autoMountAll(){
   buildVocab();
   const lib = state.assets;
   const mounts = {};
-  Object.keys(state.mounts).forEach(nid=>{ mounts[nid] = state.mounts[nid].filter(m=>!m.auto); });
+  Object.keys(state.mounts).forEach(nid=>{ mounts[nid] = state.mounts[nid].filter(m=>!m.auto && m.via!=='chain-confirm'); });
   const audios = lib.filter(a=>a.cat==='audio');
   // 音频：一个角色一条音轨（如 001-角色甲_音轨.wav），节点里每个出场角色挂自己的音轨
   const audioByChar = {};
@@ -1377,21 +1766,23 @@ function autoMountAll(){
     const om = (state.outfitMap||{})[s.id];
     if(om && om.length){
       om.forEach(en=>{
-        const scored = lib.filter(a=>a.cat==='role' && (!en.char || a.char===en.char || (a.name||'').includes(en.char))).map(a=>({a, sc:mapAssetScore(a, en)})).filter(x=>x.sc>0).sort((x,y)=>y.sc-x.sc);
+        const scored = lib.filter(a=>a.cat==='role' && (!en.char || a.char===en.char || charOwnsAssetName(en.char, a.name))).map(a=>({a, sc:mapAssetScore(a, en)})).filter(x=>x.sc>0).sort((x,y)=>y.sc-x.sc);
         if(scored[0]) arr.push({aid:scored[0].a.id, cat:'role', auto:true, char:en.char, via:'map'});
       });
     } else {
       (s.chars||[]).forEach(ch=>{
-        const vars = lib.filter(a=>a.cat==='role' && a.char===ch);
+        const vars = lib.filter(a=>a.cat==='role' && (a.char===ch || charOwnsAssetName(ch, a.name)));
         if(!vars.length) return;
+        // [FIX 2026-09-25] 单套服装直接挂；多套必须有分镜提示词里的服装证据，否则宁缺勿错（缺项流程会弹窗处理）
+        if(vars.length===1){ arr.push({aid:vars[0].id, cat:'role', auto:true, char:ch}); return; }
         const full = segFullPrompt(s);
-        let best = vars[0], bestScore = -1;
+        let best = null, bestScore = 0;
         vars.forEach(v=>{
           let sc = 0;
           if(v.outfit && full.includes(v.outfit)) sc += 2 + Math.min(v.outfit.length/4, 2);
           if(sc>bestScore){ bestScore=sc; best=v; }
         });
-        arr.push({aid:best.id, cat:'role', auto:true, char:ch});
+        if(best) arr.push({aid:best.id, cat:'role', auto:true, char:ch});
       });
     }
     if(s.props){
@@ -1570,6 +1961,21 @@ document.getElementById('dirInp').onchange = e=>{
   if(!fs.length){ toast('文件夹里没有图片或音频'); return; }
   importAssetFiles(fs.map(f=>({file:f, dir:(f.webkitRelativePath||f.name).split('/').slice(0,-1).join('/')})));
 };
+document.getElementById('btnFiles').onclick = ()=> document.getElementById('fileInp').click();
+document.getElementById('fileInp').onchange = e=>{
+  const isMedia = f => (f.type && (f.type.startsWith('image/') || f.type.startsWith('audio/'))) || /\.(wav|mp3|m4a|aac|ogg|flac|wma)$/i.test(f.name||'');
+  const fs = Array.from(e.target.files).filter(isMedia);
+  e.target.value = '';
+  if(!fs.length){ toast('没有可选的图片或音频'); return; }
+  importAssetFiles(fs.map(f=>({file:f, dir:'手动导入'})));
+};
+document.getElementById('dupAllRep').onclick = ()=>{ if(!dupCtx) return; dupCtx.items.forEach(i=>{ if(i.dup) i.choice='replace'; }); renderDupList(); };
+document.getElementById('dupAllSkip').onclick = ()=>{ if(!dupCtx) return; dupCtx.items.forEach(i=>{ if(i.dup) i.choice='skip'; }); renderDupList(); };
+document.getElementById('dupCancel').onclick = ()=>{ document.getElementById('dupModal').classList.remove('show'); const r=dupCtx && dupCtx.resolve; dupCtx=null; if(r) r(false); };
+document.getElementById('dupOk').onclick = ()=>{ if(!dupCtx) return; document.getElementById('dupModal').classList.remove('show'); const r=dupCtx.resolve; dupCtx=null; if(r) r(true); };
+document.getElementById('missFiles').onclick = ()=> document.getElementById('fileInp').click();
+document.getElementById('missDir').onclick = ()=> document.getElementById('dirInp').click();
+document.getElementById('missClose').onclick = ()=>{ document.getElementById('missModal').classList.remove('show'); missModalActive=false; };
 document.getElementById('btnAutoMount').onclick = ()=>{ autoMountAll(); toast('已按分镜重新自动挂载'); };
 document.getElementById('btnLayout').onclick = ()=>{ state.pos = {}; saveState(); layoutAndRender(); toast('已按分镜号自动排版'); };
 document.getElementById('btnReclassify').onclick = reclassifyUnknowns;

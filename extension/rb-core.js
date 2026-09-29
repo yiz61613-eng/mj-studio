@@ -40,7 +40,7 @@
     colStepX: 700, gridPerCol: 6, epGapCols: 1,
   };
 
-  const S = { segs: [], files: [], chars: [], plan: null, parsedEps: null, adapter: null };
+  const S = { segs: [], files: [], chars: [], plan: null, parsedEps: null, adapter: null, assetAudit: [] };
   const adapters = [];
 
   /* ---------- 工具 ---------- */
@@ -159,15 +159,16 @@
       }
       // 角色行里有、映射没覆盖的角色：按就近集数的服装兼底 + 补音轨（30s 合并段常见）
       const chLine = p.lines.find(l => l.startsWith('角色：'));
-      if (chLine) for (const ch of chLine.replace(/^角色：/, '').split(/[、，,]/).map(t => t.trim().split(/（/)[0]).filter(Boolean)) {
+      p.requiredChars = chLine ? [...new Set(chLine.replace(/^角色：/, '').replace(/【[^】]*】|\[[^\]]*\]/g, '').split(/[、，,;；\s]+/).map(t => t.trim().split(/[（(]/)[0].trim()).filter(Boolean))] : [];
+      for (const ch of p.requiredChars) {
         if (!p.chars[ch]) { const rf = pickOutfit(ch, p.ep); if (rf) p.chars[ch] = rf; }
         if (!p.audios[ch]) { const au = fAud(ch); if (au) p.audios[ch] = au; }
       }
-      if (!of.length) {
-        const scLine = p.lines.find(l => /^\d+(?:-\d+)*\s+(夜|日|晨|清晨|黄昏|傍晚)\s*\/\s*(内|外)\s+/.test(l));
-        if (scLine) {
-          const nm = scLine.replace(/^\d+(?:-\d+)*\s+[^\s]+\s*\/\s*[^\s]+\s+/, '').trim();
-          p.scenePhrase = nm;
+      // 场景回退匹配必须独立于服装映射是否存在，否则有 outfitMap 的段可能漏掉 scene
+      const scLine = p.lines.find(l => /^\d+(?:-\d+)*\s+[^/]+\s*\/\s*(内|外)\s+/.test(l));
+      if (scLine) {
+        const nm = scLine.replace(/^\d+(?:-\d+)*\s+[^/]+\s*\/\s*[^\s]+\s+/, '').trim();
+        p.scenePhrase = nm;
         if (!p.scene) {
           let best = null, bs = 0;
           for (const n of sceneFiles) {
@@ -176,7 +177,6 @@
             if (s > bs) { bs = s; best = n; }
           }
           p.scene = bs >= 60 ? best : null;
-        }
         }
       }
       const propLine = p.lines.find(l => l.startsWith('道具：'));
@@ -193,8 +193,17 @@
       p.props.forEach(x => files.set('2-道具/' + x.file.f, { dir: '2-道具', f: x.file.f }));
     }
     S.files = [...files.values()]; S.chars = [...chars].filter(Boolean).sort();
+    S.assetAudit = S.segs.flatMap(p => {
+      const rows = [];
+      if (!p.scene) rows.push({ segment: p.id, category: 'scene', asset: p.scenePhrase || '', reason: p.scenePhrase ? '工作台素材库/映射中未匹配到场景图' : '剧本/映射中未识别到场景资产' });
+      for (const ch of p.requiredChars || []) {
+        if (!p.chars[ch]) rows.push({ segment: p.id, category: 'role', character: ch, asset: '', reason: '未匹配到角色参考图' });
+        if (!p.audios[ch]) rows.push({ segment: p.id, category: 'audio', character: ch, asset: '', reason: '未匹配到角色音轨' });
+      }
+      return rows;
+    });
     return { segments: S.segs.length, episodes: [...new Set(S.segs.map(p => p.ep))].length, chars: S.chars.length, files: S.files.length,
-      durations: [Math.min(...S.segs.map(p => p.dur)), Math.max(...S.segs.map(p => p.dur))] };
+      assetAudit: S.assetAudit, durations: [Math.min(...S.segs.map(p => p.dur)), Math.max(...S.segs.map(p => p.dur))] };
   }
 
   /* ---------- 2. 规划（平台无关；uid 解析回调由适配器提供） ---------- */
